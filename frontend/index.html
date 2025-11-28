@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ITU Notice Tracking System</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+    <link href="https://cdn.datatables.net/fixedheader/3.4.0/css/fixedHeader.bootstrap5.min.css" rel="stylesheet">
+
+    <style>
+        :root {
+            --itu-blue: #0099d6;
+            --header-bg: #f8f9fa;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f6f9;
+        }
+
+        .navbar-itu {
+            background-color: #fff;
+            border-bottom: 3px solid var(--itu-blue);
+            padding: 15px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .navbar-brand img {
+            height: 40px;
+            margin-right: 15px;
+        }
+
+        .navbar-title {
+            font-size: 1.5rem;
+            color: #333;
+            font-weight: 600;
+            vertical-align: middle;
+        }
+
+        .main-container {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.05);
+            padding: 25px;
+            margin-top: 30px;
+            margin-bottom: 50px;
+        }
+
+        table.dataTable thead th {
+            background-color: var(--header-bg);
+            border-bottom: 2px solid var(--itu-blue) !important;
+            color: #495057;
+            font-weight: 600;
+            font-size: 0.9rem;
+            vertical-align: top;
+        }
+
+        .filter-input {
+            width: 100%;
+            padding: 4px 8px;
+            margin-top: 5px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            font-weight: normal;
+        }
+
+        .filter-input::placeholder {
+            color: #adb5bd;
+            font-style: italic;
+        }
+
+        .page-item.active .page-link {
+            background-color: var(--itu-blue);
+            border-color: var(--itu-blue);
+        }
+
+        .btn-itu {
+            background-color: var(--itu-blue);
+            color: white;
+            font-weight: 500;
+        }
+        .btn-itu:hover {
+            background-color: #007bb5;
+            color: white;
+        }
+
+        #lastUpdated {
+            font-size: 0.85rem;
+            color: #6c757d;
+            margin-right: 15px;
+        }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar navbar-itu">
+        <div class="container">
+            <a class="navbar-brand" href="#">
+                <img src="./assets/International_Telecommunication_Union_logo.svg.png" alt="ITU Logo">
+                <span class="navbar-title">Space Services Department - Notice Tracking</span>
+            </a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="main-container">
+
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h4 class="mb-1">Notice Data and Examination Results</h4>
+                    <p class="text-muted mb-0" style="font-size: 0.9rem;">
+                        View and filter all tracked space station notices.
+                    </p>
+                </div>
+                <div class="d-flex align-items-center">
+                    <span id="lastUpdated"></span>
+                    <button id="refreshBtn" class="btn btn-outline-secondary me-2 btn-sm">
+                        🔄 Refresh Data
+                    </button>
+                    <button id="downloadBtn" class="btn btn-itu btn-sm">
+                        📥 Download Report
+                    </button>
+                </div>
+            </div>
+
+            <table id="ituTable" class="table table-striped table-hover table-bordered" style="width:100%; display: none;">
+                <thead>
+                    <tr>
+                        <th>Notice ID</th>
+                        <th>Satellite Name</th>
+                        <th>Adm</th>
+                        <th>Org</th>
+                        <th>Date of Receipt</th>
+                        <th>Phase</th>
+                        <th>Publication</th>
+                        <th>Target ID</th>
+                        <th>Remarks</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    </tbody>
+            </table>
+
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+
+    <script>
+        $(document).ready(function() {
+
+
+            $('#ituTable thead tr')
+                .clone(true)
+                .addClass('filters')
+                .appendTo('#ituTable thead');
+
+            var table = $('#ituTable').DataTable({
+                // 1. 数据源
+                ajax: {
+                    url: 'data/data.json',
+                    dataSrc: ''
+                },
+
+                columns: [
+                    { data: 'sntrack_id'},
+                    { data: 'ADM' },
+                    { data: 'SatName' },
+                    { data: 'long_nom'},
+                    { data: 'BRREG'},
+                    { data: 'ntc_id' },
+                    { data: 'ntwk_org' },
+                    { data: 'act_code' },
+                    {
+                        data: 'DateofReceive',
+                        render: function(data) {
+                            return data ? data.substring(0, 10) : '';
+                        }
+                    },
+                    { data: 'InternalReference'},
+                    { data: 'DocumentumReference'}
+
+                    { data: 'PHASE' },
+                    {
+                        data: 'pub',
+                        render: function(data) { return data ? data.substring(0, 10) : ''; }
+                    },
+                    { data: 'tgt_ntc_id' },
+                    { data: 'TypeOfSubmission'},
+                    { data: 'remarks' },
+                    { data: 'subtoc'},
+                    {
+                        data: 'd_check_in',
+                        render: function(data) {
+                            return data ? data.substring(0, 10) : '';
+                        }
+                    },
+                    {
+                        data: 'd_spr_out',
+                        render: function(data) {
+                            return data ? data.substring(0, 10) : '';
+                        }
+                    },
+                    { data: 'CIRC'},
+                    {
+                        data: 'PUB',
+                        render: function(data) {
+                            return data ? data.substring(0, 10) : '';
+                        }
+                    },
+                ],
+
+                orderCellsTop: true,
+                fixedHeader: true,
+                pageLength: 20,
+                order: [[ 4, "desc" ]],
+                dom: '<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"i>>' +
+                     '<"row"<"col-sm-12"tr>>' +
+                     '<"row"<"col-sm-12 col-md-5"><"col-sm-12 col-md-7"p>>',
+
+                initComplete: function () {
+                    var api = this.api();
+
+                    api.columns().eq(0).each(function (colIdx) {
+                        var cell = $('.filters th').eq(
+                            $(api.column(colIdx).header()).index()
+                        );
+
+                        var title = $(cell).text();
+
+                        $(cell).html('<input type="text" class="filter-input" placeholder="Search ' + title + '" />');
+
+                        $('input', cell)
+                            .off('keyup change')
+                            .on('change', function (e) {
+                                $(this).attr('title', $(this).val());
+                                var regexr = '({search})';
+
+                                api.column(colIdx)
+                                    .search(
+                                        this.value != '' ? regexr.replace('{search}', '(((' + this.value + ')))') : '',
+                                        this.value != '',
+                                        this.value == ''
+                                    )
+                                    .draw();
+                            })
+                            .on('keyup', function (e) {
+                                e.stopPropagation();
+                                $(this).trigger('change');
+                            });
+                    });
+
+                    $('#ituTable').show();
+                    $('#lastUpdated').text('Data loaded from file.');
+                },
+                error: function(xhr, error, thrown) {
+                    alert('Error loading data.json. Please run the update script first.');
+                }
+            });
+
+
+            $('#refreshBtn').on('click', function() {
+                var btn = $(this);
+                btn.prop('disabled', true).text('⏳ Reloading...');
+
+                table.ajax.reload(function() {
+                    var now = new Date();
+                    $('#lastUpdated').text('Synced: ' + now.toLocaleTimeString());
+                    btn.prop('disabled', false).html('🔄 Refresh Data');
+                }, false);
+            });
+
+            $('#downloadBtn').on('click', function() {
+                alert('This button can be linked to your Excel export logic!');
+            });
+
+        });
+    </script>
+</body>
+</html>
