@@ -282,7 +282,18 @@
                     { data: 'sntrack_id'},
                     { data: 'ADM' },
                     { data: 'SatName' },
-                    { data: 'long_nom'},
+                    {
+                        data: 'long_nom',
+                        render: function(data, type, row) {
+                            if (data === null || data === undefined || data === '') {
+                                return '';
+                            }
+                            var num = parseFloat(data);
+                            if (isNaN(num)) return data;
+
+                            return (Math.round(num * 10) / 10).toString();
+                        }
+                    },
                     {
                         data: 'BRREG', // Index 4
                         render: function(data) { return data ? data.substring(0, 10) : ''; }
