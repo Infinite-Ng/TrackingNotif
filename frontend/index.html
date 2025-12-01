@@ -361,7 +361,20 @@
                                     column.search(val ? '^' + val + '$' : '', true, false).draw();
                                 });
 
-                        } else if (dataSrc === 'PHASE') {
+                        } else if (dataSrc === 'act_code') {
+                            // --- act_code ---
+                            var select = $('<select class="filter-input"><option value="">All</option><option value="A">A</option><option value="M">M</option><option value="Empty">Empty</option></select>')
+                                .appendTo($(cell).empty())
+                                .on('change', function () {
+                                    var val = $(this).val();
+                                    var searchVal = '';
+                                    if (val === 'Empty') searchVal = '^$';
+                                    else if (val) searchVal = '^' + $.fn.dataTable.util.escapeRegex(val) + '$';
+                                    column.search(searchVal, true, false).draw();
+                                });
+
+                        }
+                        else if (dataSrc === 'PHASE') {
                             // --- PHASE ---
                             var select = $('<select class="filter-input"><option value="">All</option><option value="R">R</option><option value="F">F</option><option value="Empty">Empty</option></select>')
                                 .appendTo($(cell).empty())
