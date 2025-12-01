@@ -18,58 +18,121 @@
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background-color: #f4f6f9;
+            font-size: 0.9rem;
         }
 
+        /* --- 导航栏 --- */
         .navbar-itu {
             background-color: #fff;
             border-bottom: 3px solid var(--itu-blue);
-            padding: 15px 0;
+            padding: 10px 0;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         }
 
         .navbar-brand img {
-            height: 40px;
+            height: 35px;
             margin-right: 15px;
         }
 
         .navbar-title {
-            font-size: 1.5rem;
+            font-size: 1.25rem;
             color: #333;
             font-weight: 600;
             vertical-align: middle;
         }
 
+        /* --- 主容器 --- */
         .main-container {
             background: white;
             border-radius: 8px;
             box-shadow: 0 0 15px rgba(0,0,0,0.05);
-            padding: 25px;
-            margin-top: 30px;
-            margin-bottom: 50px;
+            padding: 15px;
+            margin-top: 20px;
+            margin-bottom: 30px;
         }
 
-        table.dataTable thead th {
+
+
+        /* --- 核心表格样式 --- */
+
+        /* 1. 表格基础设置 */
+        table.dataTable {
+            width: 100% !important;
+            margin: 0 auto;
+            font-size: 0.75rem; /* 约 12px */
+            border-collapse: collapse !important;
+        }
+
+        /* 2. 表头单元格 */
+        /* DataTables 会把表头复制到 scrollHeadInner 里，我们主要控制这里 */
+        .dataTables_scrollHeadInner table thead th {
             background-color: var(--header-bg);
-            border-bottom: 2px solid var(--itu-blue) !important;
             color: #495057;
             font-weight: 600;
-            font-size: 0.9rem;
-            vertical-align: top;
+            padding: 6px 6px !important; /* 紧凑内边距 */
+            border-bottom: 1px solid #dee2e6 !important;
+            vertical-align: middle;
+            white-space: nowrap; /* 禁止换行，保证宽度撑开 */
         }
 
+        /* 3. 表格内容单元格 */
+        table.dataTable tbody td {
+            padding: 4px 5px !important;
+            vertical-align: middle;
+            white-space: nowrap; /* 禁止换行 */
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        /* 鼠标悬停显示完整内容 */
+        table.dataTable tbody td:hover {
+            white-space: normal;
+            position: relative;
+            z-index: 10;
+            background-color: #fff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+
+        /* --- 滚动区域修正 (关键) --- */
+
+        /* 恢复表头容器的默认行为，允许 JS 控制滚动 */
+        .dataTables_scrollHead {
+            margin-bottom: 0 !important;
+            /* 不要写 overflow: visible !important，也不要写 width: 100% */
+        }
+
+        /* 筛选输入框样式 */
         .filter-input {
             width: 100%;
-            padding: 4px 8px;
-            margin-top: 5px;
-            border: 1px solid #ced4da;
-            border-radius: 4px;
-            font-size: 0.85rem;
-            font-weight: normal;
+            height: 22px;
+            padding: 0 4px;
+            margin: 0;
+            border: 1px solid #dee2e6;
+            border-radius: 2px;
+            font-size: 0.7rem;
+            line-height: 22px;
+            box-sizing: border-box; /* 关键：防止 padding 撑大宽度 */
         }
 
         .filter-input::placeholder {
             color: #adb5bd;
             font-style: italic;
+        }
+
+        /* 隐藏表体顶部的重复边框 */
+        .dataTables_scrollBody {
+            border-top: none !important;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        /* --- 其他组件 --- */
+        .pagination {
+            --bs-pagination-padding-x: 0.5rem;
+            --bs-pagination-padding-y: 0.25rem;
+            --bs-pagination-font-size: 0.75rem;
+            margin-top: 10px;
         }
 
         .page-item.active .page-link {
@@ -93,6 +156,7 @@
             margin-right: 15px;
         }
     </style>
+
 </head>
 <body>
 
@@ -105,7 +169,7 @@
         </div>
     </nav>
 
-    <div class="container">
+    <div class="container-fluid px-4">
         <div class="main-container">
 
             <div class="d-flex justify-content-between align-items-center mb-4">
@@ -126,18 +190,33 @@
                 </div>
             </div>
 
-            <table id="ituTable" class="table table-striped table-hover table-bordered" style="width:100%; display: none;">
+            <table id="ituTable" class="table table-striped table-hover table-bordered table-sm" style="width:100%">
+<!--            <table id="ituTable" class="table table-striped table-hover table-bordered" style="width:100%; display: none;">-->
                 <thead>
                     <tr>
+                        <th>SNTrack ID</th>
+                        <th>ADM</th>
+                        <th>SatName</th>
+                        <th>long_nom</th>
+                        <th>BRReg</th>
                         <th>Notice ID</th>
-                        <th>Satellite Name</th>
-                        <th>Adm</th>
-                        <th>Org</th>
-                        <th>Date of Receipt</th>
-                        <th>Phase</th>
-                        <th>Publication</th>
-                        <th>Target ID</th>
-                        <th>Remarks</th>
+                        <th>ntwk_org</th>
+                        <th>act_code</th>
+                        <th>DateOfReceive</th>
+                        <th>InternalReference</th>
+                        <th>DocumentumReference</th>
+
+                        <th>PHASE</th>
+                        <th>pub</th>
+                        <th>tgt_ntc_id</th>
+                        <th>TypeOfSubmission</th>
+                        <th>remarks</th>
+                        <th>subtoc</th>
+                        <th>d_check_in</th>
+                        <th>d_spr_out</th>
+                        <th>CIRC</th>
+
+
                     </tr>
                 </thead>
                 <tbody>
@@ -155,6 +234,35 @@
     <script>
         $(document).ready(function() {
 
+            // BRREG(4), pub(12), d_check_in(17), d_spr_out(18)
+            const dateColumns = [
+                { key: 'BRREG', index: 4 },
+                { key: 'pub', index: 12 },
+                { key: 'd_check_in', index: 17 },
+                { key: 'd_spr_out', index: 18 },
+                { key: 'DateofReceive', index: 8}
+            ];
+
+            // multiple cols filter synchronically
+            $.fn.dataTable.ext.search.push(
+                function( settings, data, dataIndex ) {
+                    // logic AND
+                    // need to match all the filter conditions
+                    for (var i = 0; i < dateColumns.length; i++) {
+                        var col = dateColumns[i];
+                        var min = $('#min-date-' + col.key).val();
+                        var max = $('#max-date-' + col.key).val();
+
+                        var dateStr = data[col.index] || "";
+                        var dateVal = dateStr.substring(0, 10); // YYYY-MM-DD
+
+                        if (min && dateVal < min) return false;
+                        if (max && dateVal > max) return false;
+                    }
+
+                    return true;
+                }
+            );
 
             $('#ituTable thead tr')
                 .clone(true)
@@ -162,7 +270,6 @@
                 .appendTo('#ituTable thead');
 
             var table = $('#ituTable').DataTable({
-                // 1. 数据源
                 ajax: {
                     url: 'data/data.json',
                     dataSrc: ''
@@ -173,22 +280,22 @@
                     { data: 'ADM' },
                     { data: 'SatName' },
                     { data: 'long_nom'},
-                    { data: 'BRREG'},
+                    {
+                        data: 'BRREG', // Index 4
+                        render: function(data) { return data ? data.substring(0, 10) : ''; }
+                    },
                     { data: 'ntc_id' },
                     { data: 'ntwk_org' },
                     { data: 'act_code' },
                     {
                         data: 'DateofReceive',
-                        render: function(data) {
-                            return data ? data.substring(0, 10) : '';
-                        }
+                        render: function(data) { return data ? data.substring(0, 10) : ''; }
                     },
                     { data: 'InternalReference'},
-                    { data: 'DocumentumReference'}
-
+                    { data: 'DocumentumReference'},
                     { data: 'PHASE' },
                     {
-                        data: 'pub',
+                        data: 'PUB', // Index 12
                         render: function(data) { return data ? data.substring(0, 10) : ''; }
                     },
                     { data: 'tgt_ntc_id' },
@@ -196,29 +303,21 @@
                     { data: 'remarks' },
                     { data: 'subtoc'},
                     {
-                        data: 'd_check_in',
-                        render: function(data) {
-                            return data ? data.substring(0, 10) : '';
-                        }
+                        data: 'd_check_in', // Index 17
+                        render: function(data) { return data ? data.substring(0, 10) : ''; }
                     },
                     {
-                        data: 'd_spr_out',
-                        render: function(data) {
-                            return data ? data.substring(0, 10) : '';
-                        }
+                        data: 'd_spr_out', // Index 18
+                        render: function(data) { return data ? data.substring(0, 10) : ''; }
                     },
                     { data: 'CIRC'},
-                    {
-                        data: 'PUB',
-                        render: function(data) {
-                            return data ? data.substring(0, 10) : '';
-                        }
-                    },
                 ],
 
                 orderCellsTop: true,
-                fixedHeader: true,
                 pageLength: 20,
+                scrollY: '65vh',
+                scrollCollapse: true,
+                scrollX: true,
                 order: [[ 4, "desc" ]],
                 dom: '<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"i>>' +
                      '<"row"<"col-sm-12"tr>>' +
@@ -228,47 +327,85 @@
                     var api = this.api();
 
                     api.columns().eq(0).each(function (colIdx) {
+                        var column = api.column(colIdx);
+                        var dataSrc = column.dataSrc();
                         var cell = $('.filters th').eq(
-                            $(api.column(colIdx).header()).index()
+                            $(column.header()).index()
                         );
+                        var title = $(column.header()).text();
 
-                        var title = $(cell).text();
+                        var dateColConfig = dateColumns.find(item => item.key === dataSrc);
 
-                        $(cell).html('<input type="text" class="filter-input" placeholder="Search ' + title + '" />');
+                        if (dateColConfig) {
+                            var dateHtml = `
+                                <div style="display:flex; flex-direction:column; gap:2px;">
+                                    <input type="date" id="min-date-${dataSrc}" class="filter-input" style="height:20px; font-size:0.65rem; padding:0 2px;" title="Start Date">
+                                    <input type="date" id="max-date-${dataSrc}" class="filter-input" style="height:20px; font-size:0.65rem; padding:0 2px;" title="End Date">
+                                </div>
+                            `;
+                            $(cell).html(dateHtml);
 
-                        $('input', cell)
-                            .off('keyup change')
-                            .on('change', function (e) {
-                                $(this).attr('title', $(this).val());
-                                var regexr = '({search})';
+                            $('#min-date-' + dataSrc + ', #max-date-' + dataSrc).on('change', function () {
+                                table.draw();
+                            });
 
-                                api.column(colIdx)
-                                    .search(
+                        } else if (dataSrc === 'subtoc') {
+                            // --- subtoc ---
+                            var select = $('<select class="filter-input"><option value="">All</option><option value="True">True</option><option value="False">False</option></select>')
+                                .appendTo($(cell).empty())
+                                .on('change', function () {
+                                    var val = $.fn.dataTable.util.escapeRegex($(this).val());
+                                    column.search(val ? '^' + val + '$' : '', true, false).draw();
+                                });
+
+                        } else if (dataSrc === 'PHASE') {
+                            // --- PHASE ---
+                            var select = $('<select class="filter-input"><option value="">All</option><option value="R">R</option><option value="F">F</option><option value="Empty">Empty</option></select>')
+                                .appendTo($(cell).empty())
+                                .on('change', function () {
+                                    var val = $(this).val();
+                                    var searchVal = '';
+                                    if (val === 'Empty') searchVal = '^$';
+                                    else if (val) searchVal = '^' + $.fn.dataTable.util.escapeRegex(val) + '$';
+                                    column.search(searchVal, true, false).draw();
+                                });
+
+                        } else {
+                            // --- default ---
+                            $(cell).html('<input type="text" class="filter-input" placeholder="Search" />');
+                            $('input', cell)
+                                .off('keyup change')
+                                .on('change', function (e) {
+                                    $(this).attr('title', $(this).val());
+                                    var regexr = '({search})';
+                                    column.search(
                                         this.value != '' ? regexr.replace('{search}', '(((' + this.value + ')))') : '',
                                         this.value != '',
                                         this.value == ''
-                                    )
-                                    .draw();
-                            })
-                            .on('keyup', function (e) {
-                                e.stopPropagation();
-                                $(this).trigger('change');
-                            });
+                                    ).draw();
+                                })
+                                .on('keyup', function (e) {
+                                    e.stopPropagation();
+                                    $(this).trigger('change');
+                                });
+                        }
                     });
 
+                    api.columns.adjust().draw();
                     $('#ituTable').show();
                     $('#lastUpdated').text('Data loaded from file.');
+                    setTimeout(function() {
+                        api.columns.adjust();
+                    }, 200);
                 },
                 error: function(xhr, error, thrown) {
                     alert('Error loading data.json. Please run the update script first.');
                 }
             });
 
-
             $('#refreshBtn').on('click', function() {
                 var btn = $(this);
                 btn.prop('disabled', true).text('⏳ Reloading...');
-
                 table.ajax.reload(function() {
                     var now = new Date();
                     $('#lastUpdated').text('Synced: ' + now.toLocaleTimeString());
@@ -282,5 +419,7 @@
 
         });
     </script>
+
+
 </body>
 </html>
