@@ -179,8 +179,12 @@
                         View and filter all tracked space station notices.
                     </p>
                 </div>
+
                 <div class="d-flex align-items-center">
                     <span id="lastUpdated"></span>
+                    <button id="resetBtn" class="btn btn-outline-danger me-2 btn-sm">
+                        🧹 Reset Filters
+                    </button>
                     <button id="refreshBtn" class="btn btn-outline-secondary me-2 btn-sm">
                         🔄 Refresh Data
                     </button>
@@ -191,7 +195,6 @@
             </div>
 
             <table id="ituTable" class="table table-striped table-hover table-bordered table-sm" style="width:100%">
-<!--            <table id="ituTable" class="table table-striped table-hover table-bordered" style="width:100%; display: none;">-->
                 <thead>
                     <tr>
                         <th>SNTrack ID</th>
@@ -415,6 +418,18 @@
 
             $('#downloadBtn').on('click', function() {
                 alert('This button can be linked to your Excel export logic!');
+            });
+
+            $('#resetBtn').on('click', function() {
+                // clear all the .filter-input
+                // default text-input, drop-down list (subtoc/PHASE), date selection(BRREG...)
+                $('.filter-input').val('');
+
+                // clear search key words
+                table.columns().search('');
+
+                // re-draw the table
+                table.draw();
             });
 
         });
