@@ -224,7 +224,7 @@
 
         </div>
     </div>
-
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
@@ -435,9 +435,9 @@
                 }, false);
             });
 
-            $('#downloadBtn').on('click', function() {
-                alert('This button can be linked to your Excel export logic!');
-            });
+<!--            $('#downloadBtn').on('click', function() {-->
+<!--                alert('This button can be linked to your Excel export logic!');-->
+<!--            });-->
 
             $('#resetBtn').on('click', function() {
                 // clear all the .filter-input
@@ -449,6 +449,55 @@
 
                 // re-draw the table
                 table.draw();
+            });
+
+            $('#downloadBtn').on('click', function() {
+                const filteredData = table.rows({ search: 'applied' }).data().toArray();
+
+                const columns = [
+                    { key: 'sntrack_id', header: 'SNTrack ID' },
+                    { key: 'ADM', header: 'ADM' },
+                    { key: 'ntwk_org', header: 'ntwk_org' },
+                    { key: 'ntc_id', header: 'Notice ID' },
+                    { key: 'SatName', header: 'SatName' },
+                    { key: 'long_nom', header: 'long_nom' },
+                    { key: 'BRREG', header: 'BRReg' },
+                    { key: 'DateOfReceive', header: 'DateOfReceive' },
+                    { key: 'tgt_ntc_id', header: 'tgt_ntc_id' },
+                    { key: 'InternalReference', header: 'InternalReference' },
+                    { key: 'act_code', header: 'act_code' },
+                    { key: 'TypeOfSubmission', header: 'TypeOfSubmission' },
+                    { key: 'PHASE', header: 'PHASE' },
+                    { key: 'subtoc', header: 'subtoc' },
+                    { key: 'd_check_in', header: 'd_check_in' },
+                    { key: 'd_spr_out', header: 'd_spr_out' },
+                    { key: 'CIRC', header: 'CIRC' },
+                    { key: 'PUB', header: 'pub' },
+                    { key: 'remarks', header: 'remarks' }
+                ];
+
+
+                const exportData = filteredData.map(row => {
+                    const formattedRow = {};
+                    columns.forEach(col => {
+
+                        if (['BRREG', 'PUB', 'd_check_in', 'd_spr_out', 'DateOfReceive'].includes(col.key)) {
+                            formattedRow[col.header] = row[col.key] ? row[col.key].substring(0, 10) : '';
+                        } else {
+                            formattedRow[col.header] = row[col.key] || '';
+                        }
+                    });
+                    return formattedRow;
+                });
+
+                const ws = XLSX.utils.json_to_sheet(exportData);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Notice Data");
+
+                const today = new Date();
+                const fileName = `notice_report_${today.getFullYear()}${(today.getMonth()+1).toString().padStart(2, '0')}${today.getDate().toString().padStart(2, '0')}.xlsx`;
+
+                XLSX.writeFile(wb, fileName);
             });
 
         });
