@@ -53,8 +53,6 @@ def json_serial(obj):
     raise TypeError(f"Type {type(obj)} not serializable")
 
 
-
-
 def fetch_and_export():
     print("Getting the live data from database...")
 
@@ -73,15 +71,19 @@ def fetch_and_export():
     columns = [column[0] for column in access_cursor.description]
 
     access_data = []
+    # record data in sntrack
+    access_ids_seen = set()
+
     for row in access_cursor.fetchall():
         row_dict = dict(zip(columns, row))
         if row_dict.get('ntc_id'):
-            row_dict['ntc_id'] = str(row_dict['ntc_id'])
+            val_id = str(row_dict['ntc_id'])
+            row_dict['ntc_id'] = val_id
+            access_ids_seen.add(val_id)  # 记录 ID
         access_data.append(row_dict)
 
     access_conn.close()
     print(f"✅ finished: {len(access_data)} records")
-
 
     print("Reading SQL Server res908 ...")
     sql_conn = get_sql_server_connection()
@@ -113,30 +115,11 @@ def fetch_and_export():
     else:
         print("⚠️ skipped SQL Server res908 ...")
 
-    print("Merging Data...")
-    # final_data = []
-    #
-    # for row in access_data:
-    #     current_id = row.get('ntc_id')
-    #
-    #     extra_info = sql_lookup.get(current_id, {})
-    #
-    #     # if key confliction, extra_info will cover access data
-    #     merged_row = {**row, **extra_info}
-    #
-    #     for field in sql_columns:
-    #         if field not in merged_row:
-    #             merged_row[field] = ""
-    #
-    #     final_data.append(merged_row)
-
-    print("🚀Merging (LEFT JOIN t2 ON t1.ntc_id = CAST(t2.sns_ntc_id))...")
+    print("Merging Data (Full Outer Logic)...")
     final_data = []
 
     for row in access_data:
-        # Join Key
         join_key = row.get('ntc_id')
-
         extra_info = sql_lookup.get(join_key, {})
 
         merged_row = {**row, **extra_info}
@@ -145,9 +128,38 @@ def fetch_and_export():
             if field not in merged_row:
                 merged_row[field] = ""
 
-
         final_data.append(merged_row)
 
+    # --- 2. 【新增】处理只在 SQL Server 中存在的数据 ---
+    # 定义 Access 表中的字段，这些字段在新行里需要补全为空，防止前端报错
+    access_columns_list = [
+        '2d_date', 'BRREG', 'ADM', 'ntc_id', 'd_val_in', 'd_check_in',
+        'd_spr_out', 'd_complete', 'PUB', 'd_wmeeting', 'PUB2', 'PUB3',
+        'remarks', 'tex_remarks', 'CIRC', 'CIRC2', 'CIRC3', 'PHASE',
+        'tgt_ntc_id', 'subtoc'
+    ]
+
+    for sql_id, sql_row in sql_lookup.items():
+        if sql_id not in access_ids_seen:
+            # this ID not in Access (sntrack) ，is esubmission only
+            new_row = sql_row.copy()
+
+            # mapping
+            new_row['ntc_id'] = sql_id  # 填补 Notice ID
+
+            # 尝试映射 ADM (通常对应 ntwk_org)
+            # if 'ntwk_org' in new_row:
+            #     new_row['ADM'] = new_row['ntwk_org']
+
+            # 尝试映射 BRREG (通常对应 DateOfReceive)
+            # if 'DateOfReceive' in new_row:
+            #     new_row['BRREG'] = new_row['DateOfReceive']
+
+            for col in access_columns_list:
+                if col not in new_row:
+                    new_row[col] = ""
+
+            final_data.append(new_row)
 
     print(f"Writing to {OUTPUT_FILE} ...")
     try:
