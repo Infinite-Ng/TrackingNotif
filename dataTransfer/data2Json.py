@@ -90,7 +90,7 @@ def fetch_and_export():
     sql_lookup = {}
 
     sql_fields_lower = [
-        'SatName', 'long_nom', 'ntwk_org', 'act_code', 'DateofReceive',
+        'SatName', 'long_nom', 'ntwk_org', 'act_code', 'DateOfReceive',
         'TypeOfSubmission', 'DocumentumReference', 'InternalReference', 'sntrack_id'
     ]
 
