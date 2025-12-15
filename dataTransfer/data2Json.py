@@ -137,15 +137,10 @@ def fetch_and_export():
         # Join Key
         join_key = row.get('ntc_id')
 
-        # 在 SQL Server 字典中查找 (Lookup)
-        # 如果找不到，返回空字典 {} (符合 Left Join 逻辑)
         extra_info = sql_lookup.get(join_key, {})
 
-        # 合并数据
         merged_row = {**row, **extra_info}
 
-        # 数据清洗：补全 SQL Server 缺失的字段为空字符串
-        # 否则前端 DataTables 会报错 "Requested unknown parameter"
         for field in sql_fields_lower:
             if field not in merged_row:
                 merged_row[field] = ""
