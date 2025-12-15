@@ -122,6 +122,10 @@ def fetch_and_export():
         join_key = row.get('ntc_id')
         extra_info = sql_lookup.get(join_key, {})
 
+        tgt_ntc_id = row.get('tgt_ntc_id')
+        if tgt_ntc_id in (0, '', None):
+            row['tgt_ntc_id'] = ''
+
         merged_row = {**row, **extra_info}
 
         for field in sql_fields_lower:
@@ -130,8 +134,6 @@ def fetch_and_export():
 
         final_data.append(merged_row)
 
-    # --- 2. 【新增】处理只在 SQL Server 中存在的数据 ---
-    # 定义 Access 表中的字段，这些字段在新行里需要补全为空，防止前端报错
     access_columns_list = [
         '2d_date', 'BRREG', 'ADM', 'ntc_id', 'd_val_in', 'd_check_in',
         'd_spr_out', 'd_complete', 'PUB', 'd_wmeeting', 'PUB2', 'PUB3',
@@ -147,11 +149,13 @@ def fetch_and_export():
             # mapping
             new_row['ntc_id'] = sql_id  # 填补 Notice ID
 
-            # 尝试映射 ADM (通常对应 ntwk_org)
-            # if 'ntwk_org' in new_row:
-            #     new_row['ADM'] = new_row['ntwk_org']
+            if 'tgt_ntc_id' in new_row:
+                tgt_ntc_id = new_row['tgt_ntc_id']
+                if tgt_ntc_id in (0, '', None):
+                    new_row['tgt_ntc_id'] = ''
+            else:
+                new_row['tgt_ntc_id'] = ''
 
-            # 尝试映射 BRREG (通常对应 DateOfReceive)
             # if 'DateOfReceive' in new_row:
             #     new_row['BRREG'] = new_row['DateOfReceive']
 
