@@ -199,27 +199,23 @@
                     <tr>
                         <th>SNTrack ID</th>
                         <th>ADM</th>
+                        <th>ntwk_org</th>
+                        <th>Notice ID</th>
                         <th>SatName</th>
                         <th>long_nom</th>
                         <th>BRReg</th>
-                        <th>Notice ID</th>
-                        <th>ntwk_org</th>
-                        <th>act_code</th>
                         <th>DateOfReceive</th>
-                        <th>InternalReference</th>
-                        <th>DocumentumReference</th>
-
-                        <th>PHASE</th>
-                        <th>pub</th>
                         <th>tgt_ntc_id</th>
+                        <th>InternalReference</th>
+                        <th>act_code</th>
                         <th>TypeOfSubmission</th>
-                        <th>remarks</th>
+                        <th>PHASE</th>
                         <th>subtoc</th>
                         <th>d_check_in</th>
                         <th>d_spr_out</th>
                         <th>CIRC</th>
-
-
+                        <th>pub</th>
+                        <th>remarks</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -237,13 +233,13 @@
     <script>
         $(document).ready(function() {
 
-            // BRREG(4), pub(12), d_check_in(17), d_spr_out(18)
+            // BRREG(6), pub(17), d_check_in(14), d_spr_out(15)
             const dateColumns = [
-                { key: 'BRREG', index: 4 },
-                { key: 'pub', index: 12 },
-                { key: 'd_check_in', index: 17 },
-                { key: 'd_spr_out', index: 18 },
-                { key: 'DateofReceive', index: 8}
+                { key: 'BRREG', index: 6 },
+                { key: 'pub', index: 17 },
+                { key: 'd_check_in', index: 14 },
+                { key: 'd_spr_out', index: 15 },
+                { key: 'DateofReceive', index: 7}
             ];
 
             // multiple cols filter synchronically
@@ -281,6 +277,8 @@
                 columns: [
                     { data: 'sntrack_id'},
                     { data: 'ADM' },
+                    { data: 'ntwk_org' },
+                    { data: 'ntc_id' },
                     { data: 'SatName' },
                     {
                         data: 'long_nom',
@@ -295,36 +293,33 @@
                         }
                     },
                     {
-                        data: 'BRREG', // Index 4
+                        data: 'BRREG',
                         render: function(data) { return data ? data.substring(0, 10) : ''; }
                     },
-                    { data: 'ntc_id' },
-                    { data: 'ntwk_org' },
-                    { data: 'act_code' },
                     {
                         data: 'DateofReceive',
                         render: function(data) { return data ? data.substring(0, 10) : ''; }
                     },
-                    { data: 'InternalReference'},
-                    { data: 'DocumentumReference'},
-                    { data: 'PHASE' },
-                    {
-                        data: 'PUB', // Index 12
-                        render: function(data) { return data ? data.substring(0, 10) : ''; }
-                    },
                     { data: 'tgt_ntc_id' },
+                    { data: 'InternalReference'},
+                    { data: 'act_code' },
                     { data: 'TypeOfSubmission'},
-                    { data: 'remarks' },
+                    { data: 'PHASE' },
                     { data: 'subtoc'},
                     {
-                        data: 'd_check_in', // Index 17
+                        data: 'd_check_in',
                         render: function(data) { return data ? data.substring(0, 10) : ''; }
                     },
                     {
-                        data: 'd_spr_out', // Index 18
+                        data: 'd_spr_out',
                         render: function(data) { return data ? data.substring(0, 10) : ''; }
                     },
                     { data: 'CIRC'},
+                    {
+                        data: 'PUB',
+                        render: function(data) { return data ? data.substring(0, 10) : ''; }
+                    },
+                    { data: 'remarks' }
                 ],
 
                 orderCellsTop: true,
