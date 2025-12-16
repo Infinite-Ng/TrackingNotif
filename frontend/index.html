@@ -174,7 +174,7 @@
 
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <div>
-                    <h4 class="mb-1">Notice Data and Examination Results</h4>
+                    <h4 class="mb-1" >Notice Data and Examination Results</h4>
                     <p class="text-muted mb-0" style="font-size: 0.9rem;">
                         View and filter all tracked space station notices.
                     </p>
@@ -379,6 +379,23 @@
                                     column.search(searchVal, true, false).draw();
                                 });
 
+                        }
+                        else if (dataSrc === 'CIRC') {
+                            // --- CIRC ---
+                            var select = $('<select class="filter-input"><option value="">All</option><option value="HasValue">Has Value</option><option value="Empty">Empty</option></select>')
+                                .appendTo($(cell).empty())
+                                .on('change', function () {
+                                    var val = $(this).val();
+                                    var searchVal = '';
+
+                                    if (val === 'Empty') {
+                                        searchVal = '^$';
+                                    } else if (val === 'HasValue') {
+                                        searchVal = '^.+$';
+                                    }
+
+                                    column.search(searchVal, true, false).draw();
+                                });
                         }
                         else if (dataSrc === 'PHASE') {
                             // --- PHASE ---
