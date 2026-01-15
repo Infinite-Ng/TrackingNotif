@@ -83,7 +83,7 @@ def fetch_and_export():
         access_data.append(row_dict)
 
     access_conn.close()
-    print(f"✅ finished: {len(access_data)} records")
+    print(f"finished: {len(access_data)} records")
 
     print("Reading SQL Server res908 ...")
     sql_conn = get_sql_server_connection()
@@ -111,9 +111,9 @@ def fetch_and_export():
             sql_lookup[key] = row_dict
 
         sql_conn.close()
-        print(f"✅ finished: {len(sql_lookup)} records")
+        print(f"finished: {len(sql_lookup)} records")
     else:
-        print("⚠️ skipped SQL Server res908 ...")
+        print("skipped SQL Server res908 ...")
 
     print("Merging Data (Full Outer Logic)...")
     final_data = []
@@ -169,9 +169,9 @@ def fetch_and_export():
     try:
         with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
             json.dump(final_data, f, ensure_ascii=False, default=json_serial)
-        print("🎉 Succeeded, data.json is updated.")
+        print("Succeeded, data.json is updated.")
     except Exception as e:
-        print(f"❌ written failed: {e}")
+        print(f"written failed: {e}")
 
 
 if __name__ == '__main__':
