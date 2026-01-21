@@ -61,8 +61,14 @@ def fetch_and_export():
         return
 
     access_cursor = access_conn.cursor()
+    # get all the column name
+    # temp_query = "SELECT * FROM tblSpaceStnNotif LIMIT1"
+    # access_cursor.execute(temp_query)
+    # columns = [column[0] for column in access_cursor.description]
+    # print("All Column Names:", columns)
+
     access_query = """
-            SELECT [2d_date], BRREG, ADM, ntc_id, d_val_in, d_check_in, d_spr_out, d_complete, PUB, d_wmeeting, PUB2, PUB3, remarks, tex_remarks, CIRC, CIRC2, CIRC3, PHASE, tgt_ntc_id, subtoc
+            SELECT [2d_date], BRREG, ADM, ntc_id, d_val_in, d_check_in, d_spr_out, d_complete, PUB, d_wmeeting, PUB2, PUB3, remarks, tex_remarks, CIRC, CIRC2, CIRC3, PHASE, tgt_ntc_id, subtoc, SUP, f_11_41, f_11_32A
             FROM tblSpaceStnNotif
             WHERE ntc_id <> 0
             """
@@ -138,7 +144,7 @@ def fetch_and_export():
         '2d_date', 'BRREG', 'ADM', 'ntc_id', 'd_val_in', 'd_check_in',
         'd_spr_out', 'd_complete', 'PUB', 'd_wmeeting', 'PUB2', 'PUB3',
         'remarks', 'tex_remarks', 'CIRC', 'CIRC2', 'CIRC3', 'PHASE',
-        'tgt_ntc_id', 'subtoc'
+        'tgt_ntc_id', 'subtoc', 'SUP', 'f_11_41', 'f_11_32A'
     ]
 
     for sql_id, sql_row in sql_lookup.items():

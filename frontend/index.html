@@ -198,6 +198,8 @@
                 <thead>
                     <tr>
                         <th>SNTrack ID</th>
+                        <th>11.32A</th>
+                        <th>11.41</th>
                         <th>ADM</th>
                         <th>ntwk_org</th>
                         <th>SatName</th>
@@ -240,13 +242,13 @@
 
             // BRREG(6), pub(17), d_check_in(14), d_spr_out(15)
             const dateColumns = [
-                { key: 'BRREG', index: 5 },
-                { key: 'PUB', index: 16 },
-                { key: 'PUB2', index: 18 },
-                { key: 'PUB3', index: 20 },
-                { key: 'd_check_in', index: 13 },
-                { key: 'd_spr_out', index: 14},
-                { key: 'DateOfReceive', index: 6}
+                { key: 'BRREG', index: 6 },
+                { key: 'PUB', index: 17 },
+                { key: 'PUB2', index: 19 },
+                { key: 'PUB3', index: 21 },
+                { key: 'd_check_in', index: 14 },
+                { key: 'd_spr_out', index: 15},
+                { key: 'DateOfReceive', index: 7}
             ];
 
             // multiple cols filter synchronically
@@ -283,6 +285,8 @@
 
                 columns: [
                     { data: 'sntrack_id'},
+                    { data: 'f_11_32A'},
+                    { data: 'f_11_41'},
                     { data: 'ADM' },
                     { data: 'ntwk_org' },
                     { data: 'SatName' },
@@ -378,6 +382,24 @@
 
                         } else if (dataSrc === 'subtoc') {
                             // --- subtoc ---
+                            var select = $('<select class="filter-input"><option value="">All</option><option value="True">True</option><option value="False">False</option></select>')
+                                .appendTo($(cell).empty())
+                                .on('change', function () {
+                                    var val = $.fn.dataTable.util.escapeRegex($(this).val());
+                                    column.search(val ? '^' + val + '$' : '', true, false).draw();
+                                });
+
+                        } else if (dataSrc === 'f_11_32A') {
+                            // --- prov 11.32A ---
+                            var select = $('<select class="filter-input"><option value="">All</option><option value="True">True</option><option value="False">False</option></select>')
+                                .appendTo($(cell).empty())
+                                .on('change', function () {
+                                    var val = $.fn.dataTable.util.escapeRegex($(this).val());
+                                    column.search(val ? '^' + val + '$' : '', true, false).draw();
+                                });
+
+                        } else if (dataSrc === 'f_11_41') {
+                            // --- prov 11.41 ---
                             var select = $('<select class="filter-input"><option value="">All</option><option value="True">True</option><option value="False">False</option></select>')
                                 .appendTo($(cell).empty())
                                 .on('change', function () {
@@ -491,6 +513,8 @@
 
                 const columns = [
                     { key: 'sntrack_id', header: 'SNTrack ID' },
+                    { key: 'f_11_32A', header: 'Prov 11.32A'},
+                    { key: 'f_11_41', header: 'Prov 11.41'},
                     { key: 'ADM', header: 'ADM' },
                     { key: 'ntwk_org', header: 'ntwk_org' },
                     { key: 'ntc_id', header: 'Notice ID' },
