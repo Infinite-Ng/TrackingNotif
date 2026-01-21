@@ -163,7 +163,7 @@
     <nav class="navbar navbar-itu">
         <div class="container">
             <a class="navbar-brand" href="#">
-                <img src="./assets/International_Telecommunication_Union_logo.svg.png" alt="ITU Logo">
+                <img src="./logo-itu-slogan.svg" alt="ITU Logo">
                 <span class="navbar-title">Space Services Department - Notice Tracking</span>
             </a>
         </div>
@@ -200,14 +200,13 @@
                         <th>SNTrack ID</th>
                         <th>ADM</th>
                         <th>ntwk_org</th>
-                        <th>Notice ID</th>
                         <th>SatName</th>
                         <th>long_nom</th>
                         <th>BRReg</th>
                         <th>DateOfReceive</th>
-                        <th>tgt_ntc_id</th>
-                        <th>InternalReference</th>
+                        <th>Notice ID</th>
                         <th>act_code</th>
+                        <th>tgt_ntc_id</th>
                         <th>TypeOfSubmission</th>
                         <th>PHASE</th>
                         <th>subtoc</th>
@@ -215,7 +214,13 @@
                         <th>d_spr_out</th>
                         <th>CIRC</th>
                         <th>pub</th>
+                        <th>CIRC2</th>
+                        <th>pub2</th>
+                        <th>CIRC3</th>
+                        <th>pub3</th>
+                        <th>SUP</th>
                         <th>remarks</th>
+                        <th>InternalReference</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -235,11 +240,13 @@
 
             // BRREG(6), pub(17), d_check_in(14), d_spr_out(15)
             const dateColumns = [
-                { key: 'BRREG', index: 6 },
-                { key: 'PUB', index: 17 },
-                { key: 'd_check_in', index: 14 },
-                { key: 'd_spr_out', index: 15 },
-                { key: 'DateOfReceive', index: 7}
+                { key: 'BRREG', index: 5 },
+                { key: 'PUB', index: 16 },
+                { key: 'PUB2', index: 18 },
+                { key: 'PUB3', index: 20 },
+                { key: 'd_check_in', index: 13 },
+                { key: 'd_spr_out', index: 14},
+                { key: 'DateOfReceive', index: 6}
             ];
 
             // multiple cols filter synchronically
@@ -270,7 +277,7 @@
 
             var table = $('#ituTable').DataTable({
                 ajax: {
-                    url: 'data/data.json',
+                    url: './data/data.json',
                     dataSrc: ''
                 },
 
@@ -278,7 +285,6 @@
                     { data: 'sntrack_id'},
                     { data: 'ADM' },
                     { data: 'ntwk_org' },
-                    { data: 'ntc_id' },
                     { data: 'SatName' },
                     {
                         data: 'long_nom',
@@ -300,9 +306,9 @@
                         data: 'DateOfReceive',
                         render: function(data) { return data ? data.substring(0, 10) : ''; }
                     },
-                    { data: 'tgt_ntc_id' },
-                    { data: 'InternalReference'},
+                    { data: 'ntc_id' },
                     { data: 'act_code' },
+                    { data: 'tgt_ntc_id' },
                     { data: 'TypeOfSubmission'},
                     { data: 'PHASE' },
                     { data: 'subtoc'},
@@ -319,7 +325,19 @@
                         data: 'PUB',
                         render: function(data) { return data ? data.substring(0, 10) : ''; }
                     },
-                    { data: 'remarks' }
+                    { data: 'CIRC2'},
+                    {
+                        data: 'PUB2',
+                        render: function(data) { return data ? data.substring(0, 10) : ''; }
+                    },
+                    { data: 'CIRC3'},
+                    {
+                        data: 'PUB3',
+                        render: function(data) { return data ? data.substring(0, 10) : ''; }
+                    },
+                    { data: 'SUP'},
+                    { data: 'remarks' },
+                    { data: 'InternalReference'}
                 ],
 
                 orderCellsTop: true,
@@ -380,7 +398,7 @@
                                 });
 
                         }
-                        else if (dataSrc === 'CIRC') {
+                        else if (dataSrc === 'CIRC' || dataSrc === 'CIRC2' || dataSrc === 'CIRC3'){
                             // --- CIRC ---
                             var select = $('<select class="filter-input"><option value="">All</option><option value="HasValue">Has Value</option><option value="Empty">Empty</option></select>')
                                 .appendTo($(cell).empty())
@@ -481,7 +499,7 @@
                     { key: 'BRREG', header: 'BRReg' },
                     { key: 'DateOfReceive', header: 'DateOfReceive' },
                     { key: 'tgt_ntc_id', header: 'tgt_ntc_id' },
-                    { key: 'InternalReference', header: 'InternalReference' },
+                    { key: 'SUP', header: 'SUP' },
                     { key: 'act_code', header: 'act_code' },
                     { key: 'TypeOfSubmission', header: 'TypeOfSubmission' },
                     { key: 'PHASE', header: 'PHASE' },
@@ -490,6 +508,11 @@
                     { key: 'd_spr_out', header: 'd_spr_out' },
                     { key: 'CIRC', header: 'CIRC' },
                     { key: 'PUB', header: 'pub' },
+                    { key: 'CIRC2', header: 'CIRC2' },
+                    { key: 'PUB2', header: 'pub2' },
+                    { key: 'CIRC3', header: 'CIRC3' },
+                    { key: 'PUB3', header: 'pub3' },
+                    { key: 'InternalReference', header: 'InternalReference' },
                     { key: 'remarks', header: 'remarks' }
                 ];
 
@@ -498,7 +521,7 @@
                     const formattedRow = {};
                     columns.forEach(col => {
 
-                        if (['BRREG', 'PUB', 'd_check_in', 'd_spr_out', 'DateOfReceive'].includes(col.key)) {
+                        if (['BRREG', 'PUB', 'PUB2', 'PUB3', 'd_check_in', 'd_spr_out', 'DateOfReceive'].includes(col.key)) {
                             formattedRow[col.header] = row[col.key] ? row[col.key].substring(0, 10) : '';
                         } else {
                             formattedRow[col.header] = row[col.key] || '';
