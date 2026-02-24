@@ -23,6 +23,9 @@ SQL_SERVER_CONN_STRING = (
 def get_mdb_connection(path, mdw_path, username, password):
     """Establishes a connection to an MS Access database."""
     try:
+        # for driver in pyodbc.drivers():
+        #     print(driver)
+        # print(driver := pyodbc.drivers())
         conn_str = f'DRIVER={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={path};SystemDB={mdw_path};UID={username};PWD={password};'
         conn = pyodbc.connect(conn_str)
         logger.info(f"Successfully connected to MDB database: {path}")
@@ -51,6 +54,16 @@ def json_serial(obj):
     if isinstance(obj, (datetime, date)):
         return obj.isoformat()
     raise TypeError(f"Type {type(obj)} not serializable")
+
+
+def is_empty_sntrack_id(value):
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return value.strip() == ""
+    if isinstance(value, (int, float)):
+        return value == 0
+    return False
 
 
 def fetch_and_export():
@@ -138,6 +151,9 @@ def fetch_and_export():
             if field not in merged_row:
                 merged_row[field] = ""
 
+        if is_empty_sntrack_id(merged_row.get('sntrack_id')):
+            continue
+
         final_data.append(merged_row)
 
     access_columns_list = [
@@ -168,6 +184,9 @@ def fetch_and_export():
             for col in access_columns_list:
                 if col not in new_row:
                     new_row[col] = ""
+
+            if is_empty_sntrack_id(new_row.get('sntrack_id')):
+                continue
 
             final_data.append(new_row)
 

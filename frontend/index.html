@@ -51,6 +51,42 @@
             margin-bottom: 30px;
         }
 
+        /* --- Filter Bar --- */
+        .filter-bar {
+            background: #f8fbfe;
+            border: 1px solid #e6eef5;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 12px;
+        }
+
+        .filter-bar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .filter-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+        }
+
+        .filter-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .filter-label {
+            font-size: 0.7rem;
+            color: #6c757d;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
 
 
         /* --- 核心表格样式 --- */
@@ -63,27 +99,39 @@
             border-collapse: collapse !important;
         }
 
+        /* 确保表头和表体表格宽度一致 */
+        .dataTables_scrollHeadInner,
+        .dataTables_scrollHeadInner table {
+            width: 100% !important;
+        }
+
+        .dataTables_scrollBody table {
+            width: 100% !important;
+        }
+
         /* 2. 表头单元格 */
         /* DataTables 会把表头复制到 scrollHeadInner 里，我们主要控制这里 */
         .dataTables_scrollHeadInner table thead th {
             background-color: var(--header-bg);
             color: #495057;
             font-weight: 600;
-            padding: 6px 6px !important; /* 紧凑内边距 */
+            padding: 6px 8px !important;
             border-bottom: 1px solid #dee2e6 !important;
             vertical-align: middle;
             white-space: nowrap; /* 禁止换行，保证宽度撑开 */
+            box-sizing: border-box;
         }
 
         /* 3. 表格内容单元格 */
         table.dataTable tbody td {
-            padding: 4px 5px !important;
+            padding: 6px 8px !important;
             vertical-align: middle;
             white-space: nowrap; /* 禁止换行 */
             max-width: 200px;
             overflow: hidden;
             text-overflow: ellipsis;
             border-bottom: 1px solid #dee2e6;
+            box-sizing: border-box;
         }
 
         /* 鼠标悬停显示完整内容 */
@@ -114,6 +162,17 @@
             font-size: 0.7rem;
             line-height: 22px;
             box-sizing: border-box; /* 关键：防止 padding 撑大宽度 */
+        }
+
+        .filter-date-range {
+            display: flex;
+            flex-direction: row;
+            gap: 6px;
+        }
+
+        .filter-date-range input {
+            flex: 1;
+            min-width: 0;
         }
 
         .filter-input::placeholder {
@@ -194,6 +253,14 @@
                 </div>
             </div>
 
+            <div class="filter-bar">
+                <div class="filter-bar-header">
+                    <div class="fw-semibold">Filters</div>
+                    <div class="text-muted" style="font-size: 0.8rem;">All filters apply together</div>
+                </div>
+                <div id="filterBar" class="filter-grid"></div>
+            </div>
+
             <table id="ituTable" class="table table-striped table-hover table-bordered table-sm" style="width:100%">
                 <thead>
                     <tr>
@@ -240,15 +307,15 @@
     <script>
         $(document).ready(function() {
 
-            // BRREG(6), pub(17), d_check_in(14), d_spr_out(15)
+            // BRREG(7), DateOfReceive(8), d_check_in(15), d_spr_out(16), PUB(18), PUB2(20), PUB3(22)
             const dateColumns = [
-                { key: 'BRREG', index: 6 },
-                { key: 'PUB', index: 17 },
-                { key: 'PUB2', index: 19 },
-                { key: 'PUB3', index: 21 },
-                { key: 'd_check_in', index: 14 },
-                { key: 'd_spr_out', index: 15},
-                { key: 'DateOfReceive', index: 7}
+                { key: 'BRREG', index: 7 },
+                { key: 'DateOfReceive', index: 8 },
+                { key: 'd_check_in', index: 15 },
+                { key: 'd_spr_out', index: 16 },
+                { key: 'PUB', index: 18 },
+                { key: 'PUB2', index: 20 },
+                { key: 'PUB3', index: 22 }
             ];
 
             // multiple cols filter synchronically
@@ -272,10 +339,122 @@
                 }
             );
 
-            $('#ituTable thead tr')
-                .clone(true)
-                .addClass('filters')
-                .appendTo('#ituTable thead');
+            function buildFilterBar(api) {
+                var $bar = $('#filterBar');
+                $bar.empty();
+
+                api.columns().eq(0).each(function (colIdx) {
+                    var column = api.column(colIdx);
+                    var dataSrc = column.dataSrc();
+                    var title = $(column.header()).text();
+
+                    var dateColConfig = dateColumns.find(item => item.key === dataSrc);
+                    var $item = $('<div class="filter-item"></div>');
+                    $item.append('<div class="filter-label">' + title + '</div>');
+
+                    if (dateColConfig) {
+                        var dateHtml = `
+                            <div class="filter-date-range">
+                                <input type="date" id="min-date-${dataSrc}" class="filter-input" title="Start Date">
+                                <input type="date" id="max-date-${dataSrc}" class="filter-input" title="End Date">
+                            </div>
+                        `;
+                        $item.append(dateHtml);
+
+                        $item.find('input[type="date"]').on('change', function () {
+                            api.draw();
+                        });
+
+                    } else if (dataSrc === 'subtoc') {
+                        // --- subtoc ---
+                        $('<select class="filter-input"><option value="">All</option><option value="True">True</option><option value="False">False</option></select>')
+                            .appendTo($item)
+                            .on('change', function () {
+                                var val = $.fn.dataTable.util.escapeRegex($(this).val());
+                                column.search(val ? '^' + val + '$' : '', true, false).draw();
+                            });
+
+                    } else if (dataSrc === 'f_11_32A') {
+                        // --- prov 11.32A ---
+                        $('<select class="filter-input"><option value="">All</option><option value="True">True</option><option value="False">False</option></select>')
+                            .appendTo($item)
+                            .on('change', function () {
+                                var val = $.fn.dataTable.util.escapeRegex($(this).val());
+                                column.search(val ? '^' + val + '$' : '', true, false).draw();
+                            });
+
+                    } else if (dataSrc === 'f_11_41') {
+                        // --- prov 11.41 ---
+                        $('<select class="filter-input"><option value="">All</option><option value="True">True</option><option value="False">False</option></select>')
+                            .appendTo($item)
+                            .on('change', function () {
+                                var val = $.fn.dataTable.util.escapeRegex($(this).val());
+                                column.search(val ? '^' + val + '$' : '', true, false).draw();
+                            });
+
+                    } else if (dataSrc === 'act_code') {
+                        // --- act_code ---
+                        $('<select class="filter-input"><option value="">All</option><option value="A">A</option><option value="M">M</option><option value="Empty">Empty</option></select>')
+                            .appendTo($item)
+                            .on('change', function () {
+                                var val = $(this).val();
+                                var searchVal = '';
+                                if (val === 'Empty') searchVal = '^$';
+                                else if (val) searchVal = '^' + $.fn.dataTable.util.escapeRegex(val) + '$';
+                                column.search(searchVal, true, false).draw();
+                            });
+
+                    } else if (dataSrc === 'CIRC' || dataSrc === 'CIRC2' || dataSrc === 'CIRC3'){
+                        // --- CIRC ---
+                        $('<select class="filter-input"><option value="">All</option><option value="HasValue">Has Value</option><option value="Empty">Empty</option></select>')
+                            .appendTo($item)
+                            .on('change', function () {
+                                var val = $(this).val();
+                                var searchVal = '';
+
+                                if (val === 'Empty') {
+                                    searchVal = '^$';
+                                } else if (val === 'HasValue') {
+                                    searchVal = '^.+$';
+                                }
+
+                                column.search(searchVal, true, false).draw();
+                            });
+                    } else if (dataSrc === 'PHASE') {
+                        // --- PHASE ---
+                        $('<select class="filter-input"><option value="">All</option><option value="R">R</option><option value="F">F</option><option value="Empty">Empty</option></select>')
+                            .appendTo($item)
+                            .on('change', function () {
+                                var val = $(this).val();
+                                var searchVal = '';
+                                if (val === 'Empty') searchVal = '^$';
+                                else if (val) searchVal = '^' + $.fn.dataTable.util.escapeRegex(val) + '$';
+                                column.search(searchVal, true, false).draw();
+                            });
+
+                    } else {
+                        // --- default ---
+                        $item.append('<input type="text" class="filter-input" placeholder="Search" />');
+                        $('input', $item)
+                            .off('keyup change')
+                            .on('change', function (e) {
+                                $(this).attr('title', $(this).val());
+                                var regexr = '({search})';
+                                column.search(
+                                    this.value != '' ? regexr.replace('{search}', '(((' + this.value + ')))') : '',
+                                    this.value != '',
+                                    this.value == ''
+                                ).draw();
+                            })
+                            .on('keyup', function (e) {
+                                e.stopPropagation();
+                                $(this).trigger('change');
+                            });
+                    }
+
+                    $bar.append($item);
+                });
+            }
 
             var table = $('#ituTable').DataTable({
                 ajax: {
@@ -356,131 +535,24 @@
 
                 initComplete: function () {
                     var api = this.api();
-
-                    api.columns().eq(0).each(function (colIdx) {
-                        var column = api.column(colIdx);
-                        var dataSrc = column.dataSrc();
-                        var cell = $('.filters th').eq(
-                            $(column.header()).index()
-                        );
-                        var title = $(column.header()).text();
-
-                        var dateColConfig = dateColumns.find(item => item.key === dataSrc);
-
-                        if (dateColConfig) {
-                            var dateHtml = `
-                                <div style="display:flex; flex-direction:column; gap:2px;">
-                                    <input type="date" id="min-date-${dataSrc}" class="filter-input" style="height:20px; font-size:0.65rem; padding:0 2px;" title="Start Date">
-                                    <input type="date" id="max-date-${dataSrc}" class="filter-input" style="height:20px; font-size:0.65rem; padding:0 2px;" title="End Date">
-                                </div>
-                            `;
-                            $(cell).html(dateHtml);
-
-                            $('#min-date-' + dataSrc + ', #max-date-' + dataSrc).on('change', function () {
-                                table.draw();
-                            });
-
-                        } else if (dataSrc === 'subtoc') {
-                            // --- subtoc ---
-                            var select = $('<select class="filter-input"><option value="">All</option><option value="True">True</option><option value="False">False</option></select>')
-                                .appendTo($(cell).empty())
-                                .on('change', function () {
-                                    var val = $.fn.dataTable.util.escapeRegex($(this).val());
-                                    column.search(val ? '^' + val + '$' : '', true, false).draw();
-                                });
-
-                        } else if (dataSrc === 'f_11_32A') {
-                            // --- prov 11.32A ---
-                            var select = $('<select class="filter-input"><option value="">All</option><option value="True">True</option><option value="False">False</option></select>')
-                                .appendTo($(cell).empty())
-                                .on('change', function () {
-                                    var val = $.fn.dataTable.util.escapeRegex($(this).val());
-                                    column.search(val ? '^' + val + '$' : '', true, false).draw();
-                                });
-
-                        } else if (dataSrc === 'f_11_41') {
-                            // --- prov 11.41 ---
-                            var select = $('<select class="filter-input"><option value="">All</option><option value="True">True</option><option value="False">False</option></select>')
-                                .appendTo($(cell).empty())
-                                .on('change', function () {
-                                    var val = $.fn.dataTable.util.escapeRegex($(this).val());
-                                    column.search(val ? '^' + val + '$' : '', true, false).draw();
-                                });
-
-                        } else if (dataSrc === 'act_code') {
-                            // --- act_code ---
-                            var select = $('<select class="filter-input"><option value="">All</option><option value="A">A</option><option value="M">M</option><option value="Empty">Empty</option></select>')
-                                .appendTo($(cell).empty())
-                                .on('change', function () {
-                                    var val = $(this).val();
-                                    var searchVal = '';
-                                    if (val === 'Empty') searchVal = '^$';
-                                    else if (val) searchVal = '^' + $.fn.dataTable.util.escapeRegex(val) + '$';
-                                    column.search(searchVal, true, false).draw();
-                                });
-
-                        }
-                        else if (dataSrc === 'CIRC' || dataSrc === 'CIRC2' || dataSrc === 'CIRC3'){
-                            // --- CIRC ---
-                            var select = $('<select class="filter-input"><option value="">All</option><option value="HasValue">Has Value</option><option value="Empty">Empty</option></select>')
-                                .appendTo($(cell).empty())
-                                .on('change', function () {
-                                    var val = $(this).val();
-                                    var searchVal = '';
-
-                                    if (val === 'Empty') {
-                                        searchVal = '^$';
-                                    } else if (val === 'HasValue') {
-                                        searchVal = '^.+$';
-                                    }
-
-                                    column.search(searchVal, true, false).draw();
-                                });
-                        }
-                        else if (dataSrc === 'PHASE') {
-                            // --- PHASE ---
-                            var select = $('<select class="filter-input"><option value="">All</option><option value="R">R</option><option value="F">F</option><option value="Empty">Empty</option></select>')
-                                .appendTo($(cell).empty())
-                                .on('change', function () {
-                                    var val = $(this).val();
-                                    var searchVal = '';
-                                    if (val === 'Empty') searchVal = '^$';
-                                    else if (val) searchVal = '^' + $.fn.dataTable.util.escapeRegex(val) + '$';
-                                    column.search(searchVal, true, false).draw();
-                                });
-
-                        } else {
-                            // --- default ---
-                            $(cell).html('<input type="text" class="filter-input" placeholder="Search" />');
-                            $('input', cell)
-                                .off('keyup change')
-                                .on('change', function (e) {
-                                    $(this).attr('title', $(this).val());
-                                    var regexr = '({search})';
-                                    column.search(
-                                        this.value != '' ? regexr.replace('{search}', '(((' + this.value + ')))') : '',
-                                        this.value != '',
-                                        this.value == ''
-                                    ).draw();
-                                })
-                                .on('keyup', function (e) {
-                                    e.stopPropagation();
-                                    $(this).trigger('change');
-                                });
-                        }
-                    });
-
-                    api.columns.adjust().draw();
                     $('#ituTable').show();
                     $('#lastUpdated').text('Data loaded from file.');
+                    
+                    // 多次调整以确保对齐
+                    api.columns.adjust();
                     setTimeout(function() {
                         api.columns.adjust();
-                    }, 200);
+                    }, 100);
+                    setTimeout(function() {
+                        api.columns.adjust();
+                    }, 300);
                 },
                 error: function(xhr, error, thrown) {
                     alert('Error loading data.json. Please run the update script first.');
                 }
             });
+
+            buildFilterBar(table);
 
             $('#refreshBtn').on('click', function() {
                 var btn = $(this);
