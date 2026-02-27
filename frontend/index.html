@@ -99,39 +99,27 @@
             border-collapse: collapse !important;
         }
 
-        /* 确保表头和表体表格宽度一致 */
-        .dataTables_scrollHeadInner,
-        .dataTables_scrollHeadInner table {
-            width: 100% !important;
-        }
-
-        .dataTables_scrollBody table {
-            width: 100% !important;
-        }
-
         /* 2. 表头单元格 */
         /* DataTables 会把表头复制到 scrollHeadInner 里，我们主要控制这里 */
         .dataTables_scrollHeadInner table thead th {
             background-color: var(--header-bg);
             color: #495057;
             font-weight: 600;
-            padding: 6px 8px !important;
+            padding: 6px 6px !important; /* 紧凑内边距 */
             border-bottom: 1px solid #dee2e6 !important;
             vertical-align: middle;
             white-space: nowrap; /* 禁止换行，保证宽度撑开 */
-            box-sizing: border-box;
         }
 
         /* 3. 表格内容单元格 */
         table.dataTable tbody td {
-            padding: 6px 8px !important;
+            padding: 4px 5px !important;
             vertical-align: middle;
             white-space: nowrap; /* 禁止换行 */
             max-width: 200px;
             overflow: hidden;
             text-overflow: ellipsis;
             border-bottom: 1px solid #dee2e6;
-            box-sizing: border-box;
         }
 
         /* 鼠标悬停显示完整内容 */
@@ -265,8 +253,6 @@
                 <thead>
                     <tr>
                         <th>SNTrack ID</th>
-                        <th>11.32A</th>
-                        <th>11.41</th>
                         <th>ADM</th>
                         <th>ntwk_org</th>
                         <th>SatName</th>
@@ -278,6 +264,8 @@
                         <th>tgt_ntc_id</th>
                         <th>TypeOfSubmission</th>
                         <th>PHASE</th>
+                        <th>11.32A</th>
+                        <th>11.41</th>
                         <th>subtoc</th>
                         <th>d_check_in</th>
                         <th>d_spr_out</th>
@@ -309,8 +297,8 @@
 
             // BRREG(7), DateOfReceive(8), d_check_in(15), d_spr_out(16), PUB(18), PUB2(20), PUB3(22)
             const dateColumns = [
-                { key: 'BRREG', index: 7 },
-                { key: 'DateOfReceive', index: 8 },
+                { key: 'BRREG', index: 5 },
+                { key: 'DateOfReceive', index: 6 },
                 { key: 'd_check_in', index: 15 },
                 { key: 'd_spr_out', index: 16 },
                 { key: 'PUB', index: 18 },
@@ -464,8 +452,6 @@
 
                 columns: [
                     { data: 'sntrack_id'},
-                    { data: 'f_11_32A'},
-                    { data: 'f_11_41'},
                     { data: 'ADM' },
                     { data: 'ntwk_org' },
                     { data: 'SatName' },
@@ -494,6 +480,8 @@
                     { data: 'tgt_ntc_id' },
                     { data: 'TypeOfSubmission'},
                     { data: 'PHASE' },
+                    { data: 'f_11_32A'},
+                    { data: 'f_11_41'},
                     { data: 'subtoc'},
                     {
                         data: 'd_check_in',
@@ -535,17 +523,12 @@
 
                 initComplete: function () {
                     var api = this.api();
+                    api.columns.adjust().draw();
                     $('#ituTable').show();
                     $('#lastUpdated').text('Data loaded from file.');
-                    
-                    // 多次调整以确保对齐
-                    api.columns.adjust();
                     setTimeout(function() {
                         api.columns.adjust();
-                    }, 100);
-                    setTimeout(function() {
-                        api.columns.adjust();
-                    }, 300);
+                    }, 200);
                 },
                 error: function(xhr, error, thrown) {
                     alert('Error loading data.json. Please run the update script first.');
@@ -585,8 +568,6 @@
 
                 const columns = [
                     { key: 'sntrack_id', header: 'SNTrack ID' },
-                    { key: 'f_11_32A', header: 'Prov 11.32A'},
-                    { key: 'f_11_41', header: 'Prov 11.41'},
                     { key: 'ADM', header: 'ADM' },
                     { key: 'ntwk_org', header: 'ntwk_org' },
                     { key: 'ntc_id', header: 'Notice ID' },
@@ -599,6 +580,8 @@
                     { key: 'act_code', header: 'act_code' },
                     { key: 'TypeOfSubmission', header: 'TypeOfSubmission' },
                     { key: 'PHASE', header: 'PHASE' },
+                    { key: 'f_11_32A', header: 'Prov 11.32A'},
+                    { key: 'f_11_41', header: 'Prov 11.41'},
                     { key: 'subtoc', header: 'subtoc' },
                     { key: 'd_check_in', header: 'd_check_in' },
                     { key: 'd_spr_out', header: 'd_spr_out' },
