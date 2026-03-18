@@ -32,7 +32,6 @@ SQL_SERVER_CONN_STRING = (
     "PWD=sns_a_5678;"
 )
 
-
 def get_mdb_connection():
     """Establishes a connection to an MS Access database."""
     try:
@@ -171,6 +170,36 @@ def fetch_data():
     else:
         logger.warning("Skipped SQL Server res908 (connection failed)")
 
+    # Fetch status from CostSntrackeSubmission table (same database)
+    status_lookup = {}
+    status_conn = get_sql_server_connection()
+    if status_conn:
+        try:
+            status_cursor = status_conn.cursor()
+            # Query to get status for each sntrack_id
+            status_query = """
+                SELECT c.sntrack_id, ss.st_desc
+                FROM dbo.CostSntrackeSubmission c
+                LEFT JOIN dbo.SubmissionsStatus ss ON c.Status = ss.st_cur
+                WHERE c.sntrack_id IS NOT NULL
+            """
+            status_cursor.execute(status_query)
+            
+            for row in status_cursor.fetchall():
+                sntrack_id = str(row[0]) if row[0] else ''
+                st_desc = row[1] if row[1] else ''
+                if sntrack_id:
+                    status_lookup[sntrack_id] = st_desc
+            
+            status_conn.close()
+            logger.info(f"Fetched {len(status_lookup)} status records from CostSntrackeSubmission")
+        except Exception as e:
+            logger.error(f"Error fetching status: {e}")
+            if status_conn:
+                status_conn.close()
+    else:
+        logger.warning("Skipped status lookup (connection failed)")
+
     # Merge data (Full Outer Join logic)
     logger.info("Merging data...")
     final_data = []
@@ -200,6 +229,10 @@ def fetch_data():
         if is_empty_sntrack_id(merged_row.get('sntrack_id')):
             continue
 
+        # Add Status from e_submission lookup
+        sntrack_id = str(merged_row.get('sntrack_id', '')) if merged_row.get('sntrack_id') else ''
+        merged_row['Status'] = status_lookup.get(sntrack_id, '')
+
         final_data.append(convert_to_serializable(merged_row))
 
     # Add records only in SQL Server (not in Access)
@@ -221,6 +254,10 @@ def fetch_data():
 
             if is_empty_sntrack_id(new_row.get('sntrack_id')):
                 continue
+
+            # Add Status from e_submission lookup
+            sntrack_id = str(new_row.get('sntrack_id', '')) if new_row.get('sntrack_id') else ''
+            new_row['Status'] = status_lookup.get(sntrack_id, '')
 
             final_data.append(convert_to_serializable(new_row))
 
