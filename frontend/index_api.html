@@ -579,6 +579,7 @@
                             <th>act_code</th>
                             <th>tgt_ntc_id</th>
                             <th>TypeOfSubmission</th>
+                            <th>Status</th>
                             <th>PHASE</th>
                             <th>11.32A</th>
                             <th>11.41</th>
@@ -599,7 +600,7 @@
                             <th></th><th></th><th></th><th></th><th></th><th></th><th></th>
                             <th></th><th></th><th></th><th></th><th></th><th></th><th></th>
                             <th></th><th></th><th></th><th></th><th></th><th></th><th></th>
-                            <th></th><th></th><th></th><th></th><th></th>
+                            <th></th><th></th><th></th><th></th><th></th><th></th>
                         </tr>
                     </thead>
                     <tbody></tbody>
@@ -654,6 +655,10 @@
         let selectedSUPs = [];
         let allSUPs = [];
 
+        // Selected Status values (default: all selected, will be populated after data loads)
+        let selectedStatuses = [];
+        let allStatuses = [];
+
         // Format date from ISO (yyyy-mm-dd) to mm/dd/yyyy
         function formatDateToMMDDYYYY(data) {
             if (!data) return '';
@@ -687,26 +692,48 @@
                 if (isNaN(num)) return data;
                 return (Math.round(num * 10) / 10).toString();
             }},
-            { data: 'BRREG', title: 'BRReg', render: function(data) { return formatDateToMMDDYYYY(data); }},
-            { data: 'DateOfReceive', title: 'DateOfReceive', render: function(data) { return formatDateToMMDDYYYY(data); }},
+            { data: 'BRREG', title: 'BRReg', render: { 
+                display: function(data) { return formatDateToMMDDYYYY(data); },
+                sort: function(data) { return data || ''; }
+            }},
+            { data: 'DateOfReceive', title: 'DateOfReceive', render: { 
+                display: function(data) { return formatDateToMMDDYYYY(data); },
+                sort: function(data) { return data || ''; }
+            }},
             { data: 'ntc_id', title: 'Notice ID' },
             { data: 'act_code', title: 'act_code' },
             { data: 'tgt_ntc_id', title: 'tgt_ntc_id' },
             { data: 'TypeOfSubmission', title: 'TypeOfSubmission', render: function(data) {
                 return getTypeShortName(data);
             }},
+            { data: 'Status', title: 'Status' },
             { data: 'PHASE', title: 'PHASE' },
             { data: 'f_11_32A', title: '11.32A' },
             { data: 'f_11_41', title: '11.41' },
             { data: 'subtoc', title: 'subtoc' },
-            { data: 'd_check_in', title: 'd_check_in', render: function(data) { return formatDateToMMDDYYYY(data); }},
-            { data: 'd_spr_out', title: 'd_spr_out', render: function(data) { return formatDateToMMDDYYYY(data); }},
+            { data: 'd_check_in', title: 'd_check_in', render: { 
+                display: function(data) { return formatDateToMMDDYYYY(data); },
+                sort: function(data) { return data || ''; }
+            }},
+            { data: 'd_spr_out', title: 'd_spr_out', render: { 
+                display: function(data) { return formatDateToMMDDYYYY(data); },
+                sort: function(data) { return data || ''; }
+            }},
             { data: 'CIRC', title: 'CIRC' },
-            { data: 'PUB', title: 'pub', render: function(data) { return formatDateToMMDDYYYY(data); }},
+            { data: 'PUB', title: 'pub', render: { 
+                display: function(data) { return formatDateToMMDDYYYY(data); },
+                sort: function(data) { return data || ''; }
+            }},
             { data: 'CIRC2', title: 'CIRC2' },
-            { data: 'PUB2', title: 'pub2', render: function(data) { return formatDateToMMDDYYYY(data); }},
+            { data: 'PUB2', title: 'pub2', render: { 
+                display: function(data) { return formatDateToMMDDYYYY(data); },
+                sort: function(data) { return data || ''; }
+            }},
             { data: 'CIRC3', title: 'CIRC3' },
-            { data: 'PUB3', title: 'pub3', render: function(data) { return formatDateToMMDDYYYY(data); }},
+            { data: 'PUB3', title: 'pub3', render: { 
+                display: function(data) { return formatDateToMMDDYYYY(data); },
+                sort: function(data) { return data || ''; }
+            }},
             { data: 'SUP', title: 'SUP' },
             { data: 'remarks', title: 'remarks' },
             { data: 'InternalReference', title: 'InternalReference' }
@@ -761,11 +788,24 @@
         $(document).ready(function() {
             var table;
             var allData = [];
+            
+            // Column config version - increment when columns change
+            const COLUMN_CONFIG_VERSION = 2; // v2: added Status column (27 columns)
 
             // Initialize column visibility - check localStorage first
             (function initColumnVisibility() {
                 try {
+                    var savedVersion = localStorage.getItem('ituTableColumnVersion');
                     var saved = localStorage.getItem('ituTableColumnSettings');
+                    
+                    // If version mismatch or no version, clear old settings
+                    if (savedVersion !== String(COLUMN_CONFIG_VERSION)) {
+                        localStorage.removeItem('ituTableColumnSettings');
+                        localStorage.setItem('ituTableColumnVersion', String(COLUMN_CONFIG_VERSION));
+                        columnVisibility = columnConfig.map(() => true);
+                        return;
+                    }
+                    
                     if (saved) {
                         var parsed = JSON.parse(saved);
                         if (Array.isArray(parsed) && 
@@ -774,10 +814,14 @@
                             columnVisibility = parsed;
                         } else {
                             localStorage.removeItem('ituTableColumnSettings');
+                            columnVisibility = columnConfig.map(() => true);
                         }
+                    } else {
+                        columnVisibility = columnConfig.map(() => true);
                     }
                 } catch(e) {
                     localStorage.removeItem('ituTableColumnSettings');
+                    columnVisibility = columnConfig.map(() => true);
                 }
             })();
 
@@ -858,15 +902,23 @@
             // Restore column settings from localStorage
             function restoreColumnSettings() {
                 try {
-                    var saved = localStorage.getItem('ituTableColumnSettings');
-                    if (saved) {
-                        var parsedSettings = JSON.parse(saved);
-                        var visibleCount = parsedSettings.filter(v => v).length;
-                        if (visibleCount > 0 && parsedSettings.length === columnConfig.length) {
-                            columnVisibility = parsedSettings;
-                        } else {
-                            columnVisibility = columnConfig.map(() => true);
-                            localStorage.removeItem('ituTableColumnSettings');
+                    var savedVersion = localStorage.getItem('ituTableColumnVersion');
+                    if (savedVersion !== String(COLUMN_CONFIG_VERSION)) {
+                        // Version mismatch, reset everything
+                        localStorage.removeItem('ituTableColumnSettings');
+                        localStorage.setItem('ituTableColumnVersion', String(COLUMN_CONFIG_VERSION));
+                        columnVisibility = columnConfig.map(() => true);
+                    } else {
+                        var saved = localStorage.getItem('ituTableColumnSettings');
+                        if (saved) {
+                            var parsedSettings = JSON.parse(saved);
+                            var visibleCount = parsedSettings.filter(v => v).length;
+                            if (visibleCount > 0 && parsedSettings.length === columnConfig.length) {
+                                columnVisibility = parsedSettings;
+                            } else {
+                                columnVisibility = columnConfig.map(() => true);
+                                localStorage.removeItem('ituTableColumnSettings');
+                            }
                         }
                     }
                     if (table) {
@@ -882,15 +934,15 @@
                 }
             }
 
-            // Date column indices for range filtering
+            // Date column indices for range filtering (updated for Status column at index 11)
             const dateColumnIndices = {
                 'BRREG': 5,
                 'DateOfReceive': 6,
-                'd_check_in': 15,
-                'd_spr_out': 16,
-                'PUB': 18,
-                'PUB2': 20,
-                'PUB3': 22
+                'd_check_in': 16,
+                'd_spr_out': 17,
+                'PUB': 19,
+                'PUB2': 21,
+                'PUB3': 23
             };
 
             // Custom filtering function for dates
@@ -941,9 +993,17 @@
                     }
                 }
 
-                // SUP multi-select filter (column index 23)
+                // Status multi-select filter (column index 11)
+                if (selectedStatuses.length > 0 && selectedStatuses.length < allStatuses.length) {
+                    var statusVal = data[11] || '';
+                    if (!selectedStatuses.includes(statusVal)) {
+                        return false;
+                    }
+                }
+
+                // SUP multi-select filter (column index 24)
                 if (selectedSUPs.length > 0 && selectedSUPs.length < allSUPs.length) {
-                    var supVal = data[23] || '';
+                    var supVal = data[24] || '';
                     if (!selectedSUPs.includes(supVal)) {
                         return false;
                     }
@@ -972,7 +1032,7 @@
                     columns: columnConfig,
                     orderCellsTop: true,
                     pageLength: 20,
-                    order: [[6, "desc"]],
+                    order: [[6, "desc"], [5, "desc"], [7, "asc"]],
                     dom: '<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"i>>' +
                          '<"row"<"col-sm-12"tr>>' +
                          '<"row"<"col-sm-12 col-md-5"><"col-sm-12 col-md-7"p>>',
@@ -1101,6 +1161,29 @@
                         selectedADMs = [...allADMs]; // Default: all selected
 
                         var $menu = $multiSelect.find('#admMenu');
+                        
+                        // Add Select All / Deselect All toggle
+                        var $toggleAll = $('<div class="multi-select-toggle-all" style="padding: 4px 8px; border-bottom: 1px solid #dee2e6; cursor: pointer; font-size: 0.7rem; font-weight: bold; color: var(--itu-blue);">' +
+                            '☑ Select All / Deselect All</div>');
+                        $menu.append($toggleAll);
+                        $toggleAll.on('click', function(e) {
+                            e.stopPropagation();
+                            var allChecked = selectedADMs.length === allADMs.length;
+                            if (allChecked) {
+                                // Deselect all
+                                selectedADMs = [];
+                                $menu.find('input[type="checkbox"]').prop('checked', false);
+                                $menu.find('.multi-select-item').removeClass('selected');
+                            } else {
+                                // Select all
+                                selectedADMs = [...allADMs];
+                                $menu.find('input[type="checkbox"]').prop('checked', true);
+                                $menu.find('.multi-select-item').addClass('selected');
+                            }
+                            updateAdmBtnText();
+                            api.draw();
+                        });
+                        
                         allADMs.forEach(function(adm) {
                             var $item = $('<label class="multi-select-item selected">' +
                                 '<input type="checkbox" value="' + adm + '" checked>' +
@@ -1162,6 +1245,29 @@
                         selectedSUPs = [...allSUPs]; // Default: all selected
 
                         var $menu = $multiSelect.find('#supMenu');
+                        
+                        // Add Select All / Deselect All toggle
+                        var $toggleAll = $('<div class="multi-select-toggle-all" style="padding: 4px 8px; border-bottom: 1px solid #dee2e6; cursor: pointer; font-size: 0.7rem; font-weight: bold; color: var(--itu-blue);">' +
+                            '☑ Select All / Deselect All</div>');
+                        $menu.append($toggleAll);
+                        $toggleAll.on('click', function(e) {
+                            e.stopPropagation();
+                            var allChecked = selectedSUPs.length === allSUPs.length;
+                            if (allChecked) {
+                                // Deselect all
+                                selectedSUPs = [];
+                                $menu.find('input[type="checkbox"]').prop('checked', false);
+                                $menu.find('.multi-select-item').removeClass('selected');
+                            } else {
+                                // Select all
+                                selectedSUPs = [...allSUPs];
+                                $menu.find('input[type="checkbox"]').prop('checked', true);
+                                $menu.find('.multi-select-item').addClass('selected');
+                            }
+                            updateSupBtnText();
+                            api.draw();
+                        });
+                        
                         allSUPs.forEach(function(sup) {
                             var displayVal = sup === '' ? '(empty)' : sup;
                             var $item = $('<label class="multi-select-item selected">' +
@@ -1236,8 +1342,32 @@
                         api.column(colIdx).data().each(function(val) {
                             if (val) typeSet.add(val);
                         });
+                        var allTypes = Array.from(typeSet);
 
                         var $menu = $multiSelect.find('#typeOfSubmissionMenu');
+                        
+                        // Add Select All / Deselect All toggle
+                        var $toggleAll = $('<div class="multi-select-toggle-all" style="padding: 4px 8px; border-bottom: 1px solid #dee2e6; cursor: pointer; font-size: 0.7rem; font-weight: bold; color: var(--itu-blue);">' +
+                            '☑ Select All / Deselect All</div>');
+                        $menu.append($toggleAll);
+                        $toggleAll.on('click', function(e) {
+                            e.stopPropagation();
+                            var allChecked = selectedTypeOfSubmissions.length === allTypes.length;
+                            if (allChecked) {
+                                // Deselect all
+                                selectedTypeOfSubmissions = [];
+                                $menu.find('input[type="checkbox"]').prop('checked', false);
+                                $menu.find('.multi-select-item').removeClass('selected');
+                            } else {
+                                // Select all
+                                selectedTypeOfSubmissions = [...allTypes];
+                                $menu.find('input[type="checkbox"]').prop('checked', true);
+                                $menu.find('.multi-select-item').addClass('selected');
+                            }
+                            updateBtnText();
+                            api.draw();
+                        });
+                        
                         typeSet.forEach(function(type) {
                             var shortName = getTypeShortName(type);
                             var isChecked = selectedTypeOfSubmissions.includes(type);
@@ -1294,6 +1424,90 @@
                             if (!$(e.target).closest('.multi-select-dropdown').length) {
                                 $('.multi-select-menu').removeClass('show');
                             }
+                        });
+
+                    } else if (dataSrc === 'Status') {
+                        // Multi-select dropdown for Status (default: all selected)
+                        var $multiSelect = $('<div class="multi-select-dropdown">' +
+                            '<button type="button" class="multi-select-btn" id="statusBtn">All</button>' +
+                            '<div class="multi-select-menu" id="statusMenu"></div>' +
+                            '</div>');
+                        $th.append($multiSelect);
+
+                        // Collect unique Status values from data
+                        var statusSet = new Set();
+                        api.column(colIdx).data().each(function(val) {
+                            if (val !== null && val !== undefined && val !== '') statusSet.add(val);
+                        });
+                        // Add empty option
+                        statusSet.add('');
+                        allStatuses = Array.from(statusSet).sort();
+                        selectedStatuses = [...allStatuses]; // Default: all selected
+
+                        var $menu = $multiSelect.find('#statusMenu');
+                        
+                        // Add Select All / Deselect All toggle
+                        var $toggleAll = $('<div class="multi-select-toggle-all" style="padding: 4px 8px; border-bottom: 1px solid #dee2e6; cursor: pointer; font-size: 0.7rem; font-weight: bold; color: var(--itu-blue);">' +
+                            '☑ Select All / Deselect All</div>');
+                        $menu.append($toggleAll);
+                        $toggleAll.on('click', function(e) {
+                            e.stopPropagation();
+                            var allChecked = selectedStatuses.length === allStatuses.length;
+                            if (allChecked) {
+                                // Deselect all
+                                selectedStatuses = [];
+                                $menu.find('input[type="checkbox"]').prop('checked', false);
+                                $menu.find('.multi-select-item').removeClass('selected');
+                            } else {
+                                // Select all
+                                selectedStatuses = [...allStatuses];
+                                $menu.find('input[type="checkbox"]').prop('checked', true);
+                                $menu.find('.multi-select-item').addClass('selected');
+                            }
+                            updateStatusBtnText();
+                            api.draw();
+                        });
+                        
+                        allStatuses.forEach(function(status) {
+                            var displayVal = status === '' ? '(empty)' : status;
+                            var $item = $('<label class="multi-select-item selected">' +
+                                '<input type="checkbox" value="' + status + '" checked>' +
+                                '<span>' + displayVal + '</span>' +
+                                '</label>');
+                            $menu.append($item);
+                        });
+
+                        function updateStatusBtnText() {
+                            var count = selectedStatuses.length;
+                            if (count === 0) {
+                                $('#statusBtn').text('None');
+                            } else if (count === allStatuses.length) {
+                                $('#statusBtn').text('All (' + count + ')');
+                            } else {
+                                var display = selectedStatuses.slice(0, 2).map(function(s) { return s === '' ? '(empty)' : s; });
+                                $('#statusBtn').text(display.join(', ') + (count > 2 ? ' +' + (count - 2) : ''));
+                            }
+                        }
+                        updateStatusBtnText();
+
+                        $multiSelect.find('#statusBtn').on('click', function(e) {
+                            e.stopPropagation();
+                            $('.multi-select-menu').not('#statusMenu').removeClass('show');
+                            $('#statusMenu').toggleClass('show');
+                        });
+
+                        $menu.find('input[type="checkbox"]').on('change', function() {
+                            var val = $(this).val();
+                            var $item = $(this).closest('.multi-select-item');
+                            if ($(this).is(':checked')) {
+                                if (!selectedStatuses.includes(val)) selectedStatuses.push(val);
+                                $item.addClass('selected');
+                            } else {
+                                selectedStatuses = selectedStatuses.filter(function(v) { return v !== val; });
+                                $item.removeClass('selected');
+                            }
+                            updateStatusBtnText();
+                            api.draw();
                         });
 
                     } else if (selectColumns[dataSrc]) {
@@ -1486,6 +1700,14 @@
                     $(this).closest('.multi-select-item').addClass('selected');
                 });
                 $('#supBtn').text('All (' + allSUPs.length + ')');
+
+                // Reset Status multi-select to all selected
+                selectedStatuses = [...allStatuses];
+                $('#statusMenu').find('input[type="checkbox"]').each(function() {
+                    $(this).prop('checked', true);
+                    $(this).closest('.multi-select-item').addClass('selected');
+                });
+                $('#statusBtn').text('All (' + allStatuses.length + ')');
                 
                 table.columns().search('');
                 table.search('');
@@ -1509,6 +1731,7 @@
                     { key: 'SUP', header: 'SUP' },
                     { key: 'act_code', header: 'act_code' },
                     { key: 'TypeOfSubmission', header: 'TypeOfSubmission' },
+                    { key: 'Status', header: 'Status' },
                     { key: 'PHASE', header: 'PHASE' },
                     { key: 'f_11_32A', header: 'Prov 11.32A' },
                     { key: 'f_11_41', header: 'Prov 11.41' },
