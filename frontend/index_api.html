@@ -430,6 +430,72 @@
         .api-status.error .status-dot {
             background-color: #dc3545;
         }
+
+        /* Multi-select dropdown for TypeOfSubmission */
+        .multi-select-dropdown {
+            position: relative;
+            display: inline-block;
+            width: 100%;
+        }
+
+        .multi-select-btn {
+            width: 100%;
+            height: 24px;
+            padding: 2px 4px;
+            border: 1px solid #dee2e6;
+            border-radius: 3px;
+            font-size: 0.65rem;
+            background: white;
+            cursor: pointer;
+            text-align: left;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .multi-select-btn:hover {
+            border-color: var(--itu-blue);
+        }
+
+        .multi-select-menu {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            z-index: 1000;
+            min-width: 120px;
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            padding: 4px 0;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .multi-select-menu.show {
+            display: block;
+        }
+
+        .multi-select-item {
+            display: flex;
+            align-items: center;
+            padding: 4px 8px;
+            cursor: pointer;
+            font-size: 0.7rem;
+        }
+
+        .multi-select-item:hover {
+            background-color: var(--itu-blue-light);
+        }
+
+        .multi-select-item input {
+            margin-right: 6px;
+        }
+
+        .multi-select-item.selected {
+            background-color: var(--itu-blue-light);
+        }
     </style>
 </head>
 <body>
@@ -556,6 +622,59 @@
         const API_DATA_ENDPOINT = API_BASE_URL + '/api/data';
         const API_HEALTH_ENDPOINT = API_BASE_URL + '/api/health';
 
+        // TypeOfSubmission mapping: full name -> short display name
+        const typeOfSubmissionMap = {
+            'NotificationOfSpaceStation': 'NotifSS',
+            'Resubmission': 'ResubSS',
+            'APINotSubjectToCoordination': 'API',
+            'CoordinationRequest': 'CR',
+            'AdvancePublicationInformation': 'API-Info',
+            'DueDiligenceInformation': 'DDI',
+            'NotificationUnderResolution49': 'Res49',
+            'Suppression': 'Sup',
+            'Modification': 'Mod'
+        };
+
+        // Get short name for TypeOfSubmission
+        function getTypeShortName(fullName) {
+            return typeOfSubmissionMap[fullName] || fullName || '';
+        }
+
+        // Default selected TypeOfSubmission values
+        const defaultSelectedTypes = ['NotificationOfSpaceStation', 'Resubmission'];
+
+        // Current selected TypeOfSubmission values (will be set after data loads)
+        let selectedTypeOfSubmissions = [...defaultSelectedTypes];
+
+        // Selected ADM values (default: all selected, will be populated after data loads)
+        let selectedADMs = [];
+        let allADMs = [];
+
+        // Selected SUP values (default: all selected, will be populated after data loads)
+        let selectedSUPs = [];
+        let allSUPs = [];
+
+        // Format date from ISO (yyyy-mm-dd) to mm/dd/yyyy
+        function formatDateToMMDDYYYY(data) {
+            if (!data) return '';
+            var dateStr = data.substring(0, 10);
+            var parts = dateStr.split('-');
+            if (parts.length === 3) {
+                return parts[1] + '/' + parts[2] + '/' + parts[0];
+            }
+            return dateStr;
+        }
+
+        // Convert mm/dd/yyyy back to ISO format for comparison
+        function convertMMDDYYYYtoISO(dateStr) {
+            if (!dateStr) return '';
+            var parts = dateStr.split('/');
+            if (parts.length === 3) {
+                return parts[2] + '-' + parts[0] + '-' + parts[1];
+            }
+            return dateStr;
+        }
+
         // Column configuration
         const columnConfig = [
             { data: 'sntrack_id', title: 'SNTrack ID' },
@@ -568,24 +687,26 @@
                 if (isNaN(num)) return data;
                 return (Math.round(num * 10) / 10).toString();
             }},
-            { data: 'BRREG', title: 'BRReg', render: function(data) { return data ? data.substring(0, 10) : ''; }},
-            { data: 'DateOfReceive', title: 'DateOfReceive', render: function(data) { return data ? data.substring(0, 10) : ''; }},
+            { data: 'BRREG', title: 'BRReg', render: function(data) { return formatDateToMMDDYYYY(data); }},
+            { data: 'DateOfReceive', title: 'DateOfReceive', render: function(data) { return formatDateToMMDDYYYY(data); }},
             { data: 'ntc_id', title: 'Notice ID' },
             { data: 'act_code', title: 'act_code' },
             { data: 'tgt_ntc_id', title: 'tgt_ntc_id' },
-            { data: 'TypeOfSubmission', title: 'TypeOfSubmission' },
+            { data: 'TypeOfSubmission', title: 'TypeOfSubmission', render: function(data) {
+                return getTypeShortName(data);
+            }},
             { data: 'PHASE', title: 'PHASE' },
             { data: 'f_11_32A', title: '11.32A' },
             { data: 'f_11_41', title: '11.41' },
             { data: 'subtoc', title: 'subtoc' },
-            { data: 'd_check_in', title: 'd_check_in', render: function(data) { return data ? data.substring(0, 10) : ''; }},
-            { data: 'd_spr_out', title: 'd_spr_out', render: function(data) { return data ? data.substring(0, 10) : ''; }},
+            { data: 'd_check_in', title: 'd_check_in', render: function(data) { return formatDateToMMDDYYYY(data); }},
+            { data: 'd_spr_out', title: 'd_spr_out', render: function(data) { return formatDateToMMDDYYYY(data); }},
             { data: 'CIRC', title: 'CIRC' },
-            { data: 'PUB', title: 'pub', render: function(data) { return data ? data.substring(0, 10) : ''; }},
+            { data: 'PUB', title: 'pub', render: function(data) { return formatDateToMMDDYYYY(data); }},
             { data: 'CIRC2', title: 'CIRC2' },
-            { data: 'PUB2', title: 'pub2', render: function(data) { return data ? data.substring(0, 10) : ''; }},
+            { data: 'PUB2', title: 'pub2', render: function(data) { return formatDateToMMDDYYYY(data); }},
             { data: 'CIRC3', title: 'CIRC3' },
-            { data: 'PUB3', title: 'pub3', render: function(data) { return data ? data.substring(0, 10) : ''; }},
+            { data: 'PUB3', title: 'pub3', render: function(data) { return formatDateToMMDDYYYY(data); }},
             { data: 'SUP', title: 'SUP' },
             { data: 'remarks', title: 'remarks' },
             { data: 'InternalReference', title: 'InternalReference' }
@@ -774,15 +895,16 @@
 
             // Custom filtering function for dates
             $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
+                // Convert mm/dd/yyyy to ISO for comparison
                 var dateStart = $('#filter_date_start').val();
                 var dateEnd = $('#filter_date_end').val();
-                var dateVal = data[6] ? data[6].substring(0, 10) : '';
+                var dateVal = convertMMDDYYYYtoISO(data[6] || '');
                 if (dateStart && dateVal < dateStart) return false;
                 if (dateEnd && dateVal > dateEnd) return false;
 
                 var brregStart = $('#filter_brreg_start').val();
                 var brregEnd = $('#filter_brreg_end').val();
-                var brregVal = data[5] ? data[5].substring(0, 10) : '';
+                var brregVal = convertMMDDYYYYtoISO(data[5] || '');
                 if (brregStart && brregVal < brregStart) return false;
                 if (brregEnd && brregVal > brregEnd) return false;
 
@@ -790,9 +912,41 @@
                     var colIdx = dateColumnIndices[key];
                     var minVal = $('#col-min-date-' + key).val();
                     var maxVal = $('#col-max-date-' + key).val();
-                    var cellVal = data[colIdx] ? data[colIdx].substring(0, 10) : '';
+                    var cellVal = convertMMDDYYYYtoISO(data[colIdx] || '');
                     if (minVal && cellVal < minVal) return false;
                     if (maxVal && cellVal > maxVal) return false;
+                }
+
+                // TypeOfSubmission multi-select filter (column index 10)
+                if (selectedTypeOfSubmissions.length > 0) {
+                    var typeVal = data[10] || '';
+                    // Find original value from short name
+                    var originalType = typeVal;
+                    for (var fullName in typeOfSubmissionMap) {
+                        if (typeOfSubmissionMap[fullName] === typeVal) {
+                            originalType = fullName;
+                            break;
+                        }
+                    }
+                    if (!selectedTypeOfSubmissions.includes(originalType) && !selectedTypeOfSubmissions.includes(typeVal)) {
+                        return false;
+                    }
+                }
+
+                // ADM multi-select filter (column index 1)
+                if (selectedADMs.length > 0 && selectedADMs.length < allADMs.length) {
+                    var admVal = data[1] || '';
+                    if (!selectedADMs.includes(admVal)) {
+                        return false;
+                    }
+                }
+
+                // SUP multi-select filter (column index 23)
+                if (selectedSUPs.length > 0 && selectedSUPs.length < allSUPs.length) {
+                    var supVal = data[23] || '';
+                    if (!selectedSUPs.includes(supVal)) {
+                        return false;
+                    }
                 }
 
                 return true;
@@ -928,6 +1082,218 @@
                         $th.append($dateFilter);
                         $dateFilter.find('input').on('change', function() {
                             api.draw();
+                        });
+
+                    } else if (dataSrc === 'ADM') {
+                        // Multi-select dropdown for ADM (default: all selected)
+                        var $multiSelect = $('<div class="multi-select-dropdown">' +
+                            '<button type="button" class="multi-select-btn" id="admBtn">All</button>' +
+                            '<div class="multi-select-menu" id="admMenu"></div>' +
+                            '</div>');
+                        $th.append($multiSelect);
+
+                        // Collect unique ADM values from data
+                        var admSet = new Set();
+                        api.column(colIdx).data().each(function(val) {
+                            if (val) admSet.add(val);
+                        });
+                        allADMs = Array.from(admSet).sort();
+                        selectedADMs = [...allADMs]; // Default: all selected
+
+                        var $menu = $multiSelect.find('#admMenu');
+                        allADMs.forEach(function(adm) {
+                            var $item = $('<label class="multi-select-item selected">' +
+                                '<input type="checkbox" value="' + adm + '" checked>' +
+                                '<span>' + adm + '</span>' +
+                                '</label>');
+                            $menu.append($item);
+                        });
+
+                        function updateAdmBtnText() {
+                            var count = selectedADMs.length;
+                            if (count === 0) {
+                                $('#admBtn').text('None');
+                            } else if (count === allADMs.length) {
+                                $('#admBtn').text('All (' + count + ')');
+                            } else if (count <= 2) {
+                                $('#admBtn').text(selectedADMs.join(', '));
+                            } else {
+                                $('#admBtn').text(selectedADMs.slice(0, 2).join(', ') + ' +' + (count - 2));
+                            }
+                        }
+                        updateAdmBtnText();
+
+                        $multiSelect.find('#admBtn').on('click', function(e) {
+                            e.stopPropagation();
+                            $('.multi-select-menu').not('#admMenu').removeClass('show');
+                            $('#admMenu').toggleClass('show');
+                        });
+
+                        $menu.find('input[type="checkbox"]').on('change', function() {
+                            var val = $(this).val();
+                            var $item = $(this).closest('.multi-select-item');
+                            if ($(this).is(':checked')) {
+                                if (!selectedADMs.includes(val)) selectedADMs.push(val);
+                                $item.addClass('selected');
+                            } else {
+                                selectedADMs = selectedADMs.filter(function(v) { return v !== val; });
+                                $item.removeClass('selected');
+                            }
+                            updateAdmBtnText();
+                            api.draw();
+                        });
+
+                    } else if (dataSrc === 'SUP') {
+                        // Multi-select dropdown for SUP (default: all selected)
+                        var $multiSelect = $('<div class="multi-select-dropdown">' +
+                            '<button type="button" class="multi-select-btn" id="supBtn">All</button>' +
+                            '<div class="multi-select-menu" id="supMenu"></div>' +
+                            '</div>');
+                        $th.append($multiSelect);
+
+                        // Collect unique SUP values from data
+                        var supSet = new Set();
+                        api.column(colIdx).data().each(function(val) {
+                            if (val !== null && val !== undefined && val !== '') supSet.add(val);
+                        });
+                        // Add empty option
+                        supSet.add('');
+                        allSUPs = Array.from(supSet).sort();
+                        selectedSUPs = [...allSUPs]; // Default: all selected
+
+                        var $menu = $multiSelect.find('#supMenu');
+                        allSUPs.forEach(function(sup) {
+                            var displayVal = sup === '' ? '(empty)' : sup;
+                            var $item = $('<label class="multi-select-item selected">' +
+                                '<input type="checkbox" value="' + sup + '" checked>' +
+                                '<span>' + displayVal + '</span>' +
+                                '</label>');
+                            $menu.append($item);
+                        });
+
+                        function updateSupBtnText() {
+                            var count = selectedSUPs.length;
+                            if (count === 0) {
+                                $('#supBtn').text('None');
+                            } else if (count === allSUPs.length) {
+                                $('#supBtn').text('All (' + count + ')');
+                            } else {
+                                var display = selectedSUPs.slice(0, 2).map(function(s) { return s === '' ? '(empty)' : s; });
+                                $('#supBtn').text(display.join(', ') + (count > 2 ? ' +' + (count - 2) : ''));
+                            }
+                        }
+                        updateSupBtnText();
+
+                        $multiSelect.find('#supBtn').on('click', function(e) {
+                            e.stopPropagation();
+                            $('.multi-select-menu').not('#supMenu').removeClass('show');
+                            $('#supMenu').toggleClass('show');
+                        });
+
+                        $menu.find('input[type="checkbox"]').on('change', function() {
+                            var val = $(this).val();
+                            var $item = $(this).closest('.multi-select-item');
+                            if ($(this).is(':checked')) {
+                                if (!selectedSUPs.includes(val)) selectedSUPs.push(val);
+                                $item.addClass('selected');
+                            } else {
+                                selectedSUPs = selectedSUPs.filter(function(v) { return v !== val; });
+                                $item.removeClass('selected');
+                            }
+                            updateSupBtnText();
+                            api.draw();
+                        });
+
+                    } else if (dataSrc === 'long_nom') {
+                        // HasValue/Empty filter for long_nom
+                        var $select = $('<select class="column-filter">' +
+                            '<option value="">All</option>' +
+                            '<option value="HasValue">✓ Has Value</option>' +
+                            '<option value="Empty">∅ Empty</option>' +
+                            '</select>');
+                        $th.append($select);
+                        $select.on('change', function() {
+                            var val = $(this).val();
+                            var searchVal = '';
+                            if (val === 'Empty') {
+                                searchVal = '^$';
+                            } else if (val === 'HasValue') {
+                                searchVal = '^.+$';
+                            }
+                            column.search(searchVal, true, false).draw();
+                        });
+
+                    } else if (dataSrc === 'TypeOfSubmission') {
+                        // Multi-select dropdown for TypeOfSubmission
+                        var $multiSelect = $('<div class="multi-select-dropdown">' +
+                            '<button type="button" class="multi-select-btn" id="typeOfSubmissionBtn">Select Types</button>' +
+                            '<div class="multi-select-menu" id="typeOfSubmissionMenu"></div>' +
+                            '</div>');
+                        $th.append($multiSelect);
+
+                        // Collect unique TypeOfSubmission values from data
+                        var typeSet = new Set();
+                        api.column(colIdx).data().each(function(val) {
+                            if (val) typeSet.add(val);
+                        });
+
+                        var $menu = $multiSelect.find('#typeOfSubmissionMenu');
+                        typeSet.forEach(function(type) {
+                            var shortName = getTypeShortName(type);
+                            var isChecked = selectedTypeOfSubmissions.includes(type);
+                            var $item = $('<label class="multi-select-item' + (isChecked ? ' selected' : '') + '">' +
+                                '<input type="checkbox" value="' + type + '"' + (isChecked ? ' checked' : '') + '>' +
+                                '<span>' + shortName + '</span>' +
+                                '</label>');
+                            $menu.append($item);
+                        });
+
+                        // Update button text
+                        function updateBtnText() {
+                            var count = selectedTypeOfSubmissions.length;
+                            var totalCount = typeSet.size;
+                            if (count === 0) {
+                                $('#typeOfSubmissionBtn').text('None');
+                            } else if (count === totalCount) {
+                                $('#typeOfSubmissionBtn').text('All (' + count + ')');
+                            } else {
+                                var names = selectedTypeOfSubmissions.slice(0, 2).map(getTypeShortName);
+                                var text = names.join(', ');
+                                if (count > 2) text += ' +' + (count - 2);
+                                $('#typeOfSubmissionBtn').text(text);
+                            }
+                        }
+                        updateBtnText();
+
+                        // Toggle menu
+                        $multiSelect.find('#typeOfSubmissionBtn').on('click', function(e) {
+                            e.stopPropagation();
+                            $('.multi-select-menu').not('#typeOfSubmissionMenu').removeClass('show');
+                            $('#typeOfSubmissionMenu').toggleClass('show');
+                        });
+
+                        // Handle checkbox changes
+                        $menu.find('input[type="checkbox"]').on('change', function() {
+                            var val = $(this).val();
+                            var $item = $(this).closest('.multi-select-item');
+                            if ($(this).is(':checked')) {
+                                if (!selectedTypeOfSubmissions.includes(val)) {
+                                    selectedTypeOfSubmissions.push(val);
+                                }
+                                $item.addClass('selected');
+                            } else {
+                                selectedTypeOfSubmissions = selectedTypeOfSubmissions.filter(function(v) { return v !== val; });
+                                $item.removeClass('selected');
+                            }
+                            updateBtnText();
+                            api.draw();
+                        });
+
+                        // Close all menus when clicking outside
+                        $(document).on('click', function(e) {
+                            if (!$(e.target).closest('.multi-select-dropdown').length) {
+                                $('.multi-select-menu').removeClass('show');
+                            }
                         });
 
                     } else if (selectColumns[dataSrc]) {
@@ -1085,6 +1451,42 @@
                 $('#searchInput').val('');
                 $('.column-filter').val('');
                 $('.column-filter-date input').val('');
+                
+                // Reset TypeOfSubmission multi-select to default
+                selectedTypeOfSubmissions = [...defaultSelectedTypes];
+                $('#typeOfSubmissionMenu').find('input[type="checkbox"]').each(function() {
+                    var val = $(this).val();
+                    var isDefault = defaultSelectedTypes.includes(val);
+                    $(this).prop('checked', isDefault);
+                    $(this).closest('.multi-select-item').toggleClass('selected', isDefault);
+                });
+                // Update TypeOfSubmission button text
+                var count = selectedTypeOfSubmissions.length;
+                if (count === 0) {
+                    $('#typeOfSubmissionBtn').text('None');
+                } else {
+                    var names = selectedTypeOfSubmissions.slice(0, 2).map(getTypeShortName);
+                    var text = names.join(', ');
+                    if (count > 2) text += ' +' + (count - 2);
+                    $('#typeOfSubmissionBtn').text(text);
+                }
+
+                // Reset ADM multi-select to all selected
+                selectedADMs = [...allADMs];
+                $('#admMenu').find('input[type="checkbox"]').each(function() {
+                    $(this).prop('checked', true);
+                    $(this).closest('.multi-select-item').addClass('selected');
+                });
+                $('#admBtn').text('All (' + allADMs.length + ')');
+
+                // Reset SUP multi-select to all selected
+                selectedSUPs = [...allSUPs];
+                $('#supMenu').find('input[type="checkbox"]').each(function() {
+                    $(this).prop('checked', true);
+                    $(this).closest('.multi-select-item').addClass('selected');
+                });
+                $('#supBtn').text('All (' + allSUPs.length + ')');
+                
                 table.columns().search('');
                 table.search('');
                 table.draw();
