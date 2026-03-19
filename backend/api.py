@@ -16,7 +16,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+# Enable CORS for all routes with explicit configuration
+CORS(app, resources={r"/*": {"origins": "*", "methods": ["GET", "POST", "OPTIONS"], "allow_headers": ["Content-Type", "Authorization"]}})
 
 # --- Configuration ---
 TRACKING_MDB_PATH = r'M:\BR_DATA\SPACE\SNTRACK\sntrdat.mdb'
@@ -319,6 +320,19 @@ def index():
 
 
 if __name__ == '__main__':
-    # Run the Flask development server
-    # For production, use a WSGI server like gunicorn
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    import os
+    
+    cert_dir = os.path.dirname(os.path.abspath(__file__))
+    cert_file = os.path.join(cert_dir, 'cert.pem')
+    key_file = os.path.join(cert_dir, 'key.pem')
+    
+    # Check if SSL certificates exist
+    if os.path.exists(cert_file) and os.path.exists(key_file):
+        # Run with HTTPS
+        logger.info("Starting server with HTTPS on port 5000...")
+        app.run(host='0.0.0.0', port=5000, debug=True, ssl_context=(cert_file, key_file))
+    else:
+        # Run with HTTP (fallback)
+        logger.info("SSL certificates not found. Starting server with HTTP on port 5000...")
+        logger.info(f"To enable HTTPS, run: python generate_cert.py")
+        app.run(host='0.0.0.0', port=5000, debug=True)

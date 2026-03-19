@@ -619,7 +619,8 @@
         // ==========================================
         // API Configuration
         // ==========================================
-        const API_BASE_URL = 'http://localhost:5000';
+        // Use same protocol as the page (http or https) to avoid mixed content issues
+        const API_BASE_URL = window.location.protocol + '//156.106.168.213:5000';
         const API_DATA_ENDPOINT = API_BASE_URL + '/api/data';
         const API_HEALTH_ENDPOINT = API_BASE_URL + '/api/health';
 
