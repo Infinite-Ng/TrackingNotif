@@ -140,7 +140,8 @@ def fetch_data():
 
     sql_fields_lower = [
         'SatName', 'long_nom', 'ntwk_org', 'act_code', 'DateOfReceive',
-        'TypeOfSubmission', 'DocumentumReference', 'InternalReference', 'sntrack_id'
+        'TypeOfSubmission', 'DocumentumReference', 'InternalReference', 'sntrack_id',
+        'SubmissionId'
     ]
 
     if sql_conn:
@@ -149,7 +150,7 @@ def fetch_data():
             sql_query = """
                 SELECT SnsNtcId, SatName, long_nom, ntwk_org, DateOfReceive, 
                        TypeOfSubmission, DocumentumReference, sntrack_id, 
-                       act_code, InternalReference 
+                       act_code, InternalReference, SubmissionId
                 FROM res908.Res908
                 WHERE SnsNtcId <> 0
             """
@@ -170,29 +171,29 @@ def fetch_data():
     else:
         logger.warning("Skipped SQL Server res908 (connection failed)")
 
-    # Fetch status from CostSntrackeSubmission table (same database)
+    # Fetch status from dbo.Submissions table via SubmissionId
     status_lookup = {}
     status_conn = get_sql_server_connection()
     if status_conn:
         try:
             status_cursor = status_conn.cursor()
-            # Query to get status for each sntrack_id
+            # Query to get status for each SubmissionId
             status_query = """
-                SELECT c.sntrack_id, ss.st_desc
-                FROM dbo.CostSntrackeSubmission c
-                LEFT JOIN dbo.SubmissionsStatus ss ON c.Status = ss.st_cur
-                WHERE c.sntrack_id IS NOT NULL
+                SELECT s.SubmissionId, ss.st_desc
+                FROM dbo.Submissions s
+                LEFT JOIN dbo.SubmissionsStatus ss ON s.Status = ss.st_cur
+                WHERE s.SubmissionId IS NOT NULL
             """
             status_cursor.execute(status_query)
             
             for row in status_cursor.fetchall():
-                sntrack_id = str(row[0]) if row[0] else ''
+                submission_id = str(row[0]) if row[0] else ''
                 st_desc = row[1] if row[1] else ''
-                if sntrack_id:
-                    status_lookup[sntrack_id] = st_desc
+                if submission_id:
+                    status_lookup[submission_id] = st_desc
             
             status_conn.close()
-            logger.info(f"Fetched {len(status_lookup)} status records from CostSntrackeSubmission")
+            logger.info(f"Fetched {len(status_lookup)} status records from Submissions")
         except Exception as e:
             logger.error(f"Error fetching status: {e}")
             if status_conn:
@@ -229,9 +230,9 @@ def fetch_data():
         if is_empty_sntrack_id(merged_row.get('sntrack_id')):
             continue
 
-        # Add Status from e_submission lookup
-        sntrack_id = str(merged_row.get('sntrack_id', '')) if merged_row.get('sntrack_id') else ''
-        merged_row['Status'] = status_lookup.get(sntrack_id, '')
+        # Add Status from Submissions table via SubmissionId
+        submission_id = str(merged_row.get('SubmissionId', '')) if merged_row.get('SubmissionId') else ''
+        merged_row['Status'] = status_lookup.get(submission_id, '')
 
         final_data.append(convert_to_serializable(merged_row))
 
@@ -255,9 +256,9 @@ def fetch_data():
             if is_empty_sntrack_id(new_row.get('sntrack_id')):
                 continue
 
-            # Add Status from e_submission lookup
-            sntrack_id = str(new_row.get('sntrack_id', '')) if new_row.get('sntrack_id') else ''
-            new_row['Status'] = status_lookup.get(sntrack_id, '')
+            # Add Status from Submissions table via SubmissionId
+            submission_id = str(new_row.get('SubmissionId', '')) if new_row.get('SubmissionId') else ''
+            new_row['Status'] = status_lookup.get(submission_id, '')
 
             final_data.append(convert_to_serializable(new_row))
 
