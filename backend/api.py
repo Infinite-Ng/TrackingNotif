@@ -7,6 +7,8 @@ from flask import Flask, jsonify
 from flask_cors import CORS
 from datetime import date, datetime
 import logging
+import json
+import os
 
 # Configure logging
 logging.basicConfig(
@@ -24,6 +26,10 @@ TRACKING_MDB_PATH = r'M:\BR_DATA\SPACE\SNTRACK\sntrdat.mdb'
 MDW_FILE = r'M:\BR_DATA\SPACE\SNTRACK\sntrapp.mdw'
 MDB_USERNAME = 'spruser01'
 MDB_PASSWORD = 'spruser01'
+
+# Backup JSON file paths
+BACKUP_JSON_LOCAL = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'frontend', 'data', 'cached_data.json')
+BACKUP_JSON_SERVER = r'\\intweb.itu.int\intwebroot\ITU-R\space\css\notification\data\cached_data.json'
 
 SQL_SERVER_CONN_STRING = (
     "DRIVER={SQL Server};"
@@ -267,6 +273,35 @@ def fetch_data():
     return final_data, None
 
 
+def save_backup_json(data):
+    """Save data to backup JSON files for offline access."""
+    timestamp = datetime.now().isoformat()
+    backup_content = {
+        'success': True,
+        'count': len(data),
+        'timestamp': timestamp,
+        'data': data
+    }
+    
+    # Save to local frontend/data folder
+    try:
+        os.makedirs(os.path.dirname(BACKUP_JSON_LOCAL), exist_ok=True)
+        with open(BACKUP_JSON_LOCAL, 'w', encoding='utf-8') as f:
+            json.dump(backup_content, f, ensure_ascii=False)
+        logger.info(f"Saved backup JSON to local: {BACKUP_JSON_LOCAL}")
+    except Exception as e:
+        logger.error(f"Failed to save local backup JSON: {e}")
+    
+    # Save to server location
+    try:
+        os.makedirs(os.path.dirname(BACKUP_JSON_SERVER), exist_ok=True)
+        with open(BACKUP_JSON_SERVER, 'w', encoding='utf-8') as f:
+            json.dump(backup_content, f, ensure_ascii=False)
+        logger.info(f"Saved backup JSON to server: {BACKUP_JSON_SERVER}")
+    except Exception as e:
+        logger.error(f"Failed to save server backup JSON: {e}")
+
+
 @app.route('/api/data', methods=['GET'])
 def get_data():
     """
@@ -281,6 +316,9 @@ def get_data():
                 'error': error,
                 'data': []
             }), 500
+        
+        # Save to backup JSON files
+        save_backup_json(data)
         
         return jsonify({
             'success': True,

@@ -431,6 +431,10 @@
             background-color: #dc3545;
         }
 
+        .api-status.cached .status-dot {
+            background-color: #ffc107;
+        }
+
         /* Multi-select dropdown for TypeOfSubmission */
         .multi-select-dropdown {
             position: relative;
@@ -623,6 +627,9 @@
         const API_BASE_URL = window.location.protocol + '//156.106.168.213:5000';
         const API_DATA_ENDPOINT = API_BASE_URL + '/api/data';
         const API_HEALTH_ENDPOINT = API_BASE_URL + '/api/health';
+        
+        // Backup JSON file URL (stored on same server as the HTML page)
+        const BACKUP_JSON_URL = './data/cached_data.json';
 
         // TypeOfSubmission mapping: full name -> short display name
         const typeOfSubmissionMap = {
@@ -784,6 +791,99 @@
             } else {
                 $overlay.addClass('hidden');
             }
+        }
+
+        // ==========================================
+        // LocalStorage Cache Functions
+        // ==========================================
+        const CACHE_KEY = 'ituTrackingDataCache';
+        const CACHE_TIMESTAMP_KEY = 'ituTrackingDataCacheTimestamp';
+
+        function saveDataToCache(data) {
+            try {
+                var jsonStr = JSON.stringify(data);
+                console.log('Attempting to cache', data.length, 'records, size:', (jsonStr.length / 1024).toFixed(2), 'KB');
+                localStorage.setItem(CACHE_KEY, jsonStr);
+                localStorage.setItem(CACHE_TIMESTAMP_KEY, new Date().toISOString());
+                console.log('Data cached to localStorage successfully:', data.length, 'records');
+                return true;
+            } catch (e) {
+                console.error('Failed to cache data to localStorage:', e);
+                // If storage is full, try to clear old data and retry
+                if (e.name === 'QuotaExceededError') {
+                    console.warn('Storage quota exceeded, clearing old cache and retrying...');
+                    try {
+                        localStorage.removeItem(CACHE_KEY);
+                        localStorage.removeItem(CACHE_TIMESTAMP_KEY);
+                        localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+                        localStorage.setItem(CACHE_TIMESTAMP_KEY, new Date().toISOString());
+                        console.log('Cache retry successful');
+                        return true;
+                    } catch (e2) {
+                        console.error('Cache retry failed:', e2);
+                    }
+                }
+                return false;
+            }
+        }
+
+        function loadDataFromCache() {
+            console.log('Attempting to load data from localStorage cache...');
+            try {
+                var cachedData = localStorage.getItem(CACHE_KEY);
+                var cachedTimestamp = localStorage.getItem(CACHE_TIMESTAMP_KEY);
+                console.log('Cache check - Data exists:', !!cachedData, ', Timestamp exists:', !!cachedTimestamp);
+                if (cachedData && cachedTimestamp) {
+                    var data = JSON.parse(cachedData);
+                    console.log('Loaded', data.length, 'records from localStorage cache');
+                    return {
+                        data: data,
+                        timestamp: new Date(cachedTimestamp)
+                    };
+                }
+            } catch (e) {
+                console.error('Failed to load cached data from localStorage:', e);
+            }
+            console.log('No valid data in localStorage cache');
+            return null;
+        }
+
+        // Load from backup JSON file (fallback when localStorage is empty)
+        function loadFromBackupJSON(callback) {
+            console.log('Attempting to load from backup JSON file:', BACKUP_JSON_URL);
+            $.ajax({
+                url: BACKUP_JSON_URL,
+                dataType: 'json',
+                cache: false,
+                timeout: 10000,
+                success: function(response) {
+                    if (response && response.data && response.data.length > 0) {
+                        console.log('Loaded', response.data.length, 'records from backup JSON');
+                        callback({
+                            data: response.data,
+                            timestamp: response.timestamp ? new Date(response.timestamp) : new Date()
+                        });
+                    } else {
+                        console.log('Backup JSON file is empty or invalid');
+                        callback(null);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Failed to load backup JSON:', status, error);
+                    callback(null);
+                }
+            });
+        }
+
+        function formatCacheTimestamp(date) {
+            var options = {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+            };
+            return date.toLocaleString(undefined, options);
         }
 
         $(document).ready(function() {
@@ -1074,30 +1174,69 @@
                             });
                             console.log('After filtering empty SNTrack:', filteredData.length, 'records');
                             
+                            // Save to cache for offline use
+                            saveDataToCache(filteredData);
+                            
                             allData = filteredData;
                             populateADMFilter(filteredData);
                             initTable(filteredData);
                         } else {
                             console.error('API returned error:', response.error);
-                            updateApiStatus('error', 'Error: ' + response.error);
-                            $('#lastUpdated').html('<span style="color:red">Error: ' + response.error + '</span>');
-                            initTable([]);
+                            // Try to load from cache on API error
+                            var cached = loadDataFromCache();
+                            if (cached && cached.data && cached.data.length > 0) {
+                                console.log('Loading cached data due to API error');
+                                updateApiStatus('cached', 'Using cached data');
+                                $('#lastUpdated').html('<span style="color:#ffc107">Cached: ' + formatCacheTimestamp(cached.timestamp) + ' (' + cached.data.length + ' records)</span>');
+                                allData = cached.data;
+                                populateADMFilter(cached.data);
+                                initTable(cached.data);
+                            } else {
+                                updateApiStatus('error', 'Error: ' + response.error);
+                                $('#lastUpdated').html('<span style="color:red">Error: ' + response.error + '</span>');
+                                initTable([]);
+                            }
                         }
                     },
                     error: function(xhr, status, error) {
                         showLoading(false);
                         console.error('Failed to load data from API:', status, error);
-                        updateApiStatus('error', 'Connection failed');
                         
-                        var errorMsg = 'Failed to connect to API server';
-                        if (status === 'timeout') {
-                            errorMsg = 'Request timeout - server may be busy';
-                        } else if (xhr.status === 0) {
-                            errorMsg = 'Cannot reach API server. Please ensure the backend is running.';
+                        // Try to load from cache when connection fails
+                        var cached = loadDataFromCache();
+                        if (cached && cached.data && cached.data.length > 0) {
+                            console.log('Loading cached data due to connection failure');
+                            updateApiStatus('cached', 'Offline - Using cached data');
+                            $('#lastUpdated').html('<span style="color:#ffc107">Cached: ' + formatCacheTimestamp(cached.timestamp) + ' (' + cached.data.length + ' records)</span>');
+                            allData = cached.data;
+                            populateADMFilter(cached.data);
+                            initTable(cached.data);
+                        } else {
+                            // Try backup JSON file as last resort
+                            console.log('No localStorage cache, trying backup JSON file...');
+                            loadFromBackupJSON(function(backupData) {
+                                if (backupData && backupData.data && backupData.data.length > 0) {
+                                    console.log('Using backup JSON data');
+                                    updateApiStatus('cached', 'Offline - Using backup data');
+                                    $('#lastUpdated').html('<span style="color:#ffc107">Backup: ' + formatCacheTimestamp(backupData.timestamp) + ' (' + backupData.data.length + ' records)</span>');
+                                    // Also save to localStorage for next time
+                                    saveDataToCache(backupData.data);
+                                    allData = backupData.data;
+                                    populateADMFilter(backupData.data);
+                                    initTable(backupData.data);
+                                } else {
+                                    updateApiStatus('error', 'Connection failed - No cached data');
+                                    var errorMsg = 'Failed to connect to API server';
+                                    if (status === 'timeout') {
+                                        errorMsg = 'Request timeout - server may be busy';
+                                    } else if (xhr.status === 0) {
+                                        errorMsg = 'Cannot reach API server. No cached data available.';
+                                    }
+                                    $('#lastUpdated').html('<span style="color:red">' + errorMsg + '</span>');
+                                    initTable([]);
+                                }
+                            });
                         }
-                        
-                        $('#lastUpdated').html('<span style="color:red">' + errorMsg + '</span>');
-                        initTable([]);
                     }
                 });
             }
@@ -1637,6 +1776,10 @@
                             var filteredData = response.data.filter(function(row) {
                                 return row.sntrack_id && row.sntrack_id.toString().trim() !== '';
                             });
+                            
+                            // Save to cache for offline use
+                            saveDataToCache(filteredData);
+                            
                             allData = filteredData;
                             table.clear().rows.add(filteredData).draw();
                             var now = new Date();
@@ -1653,7 +1796,7 @@
                         console.error('Refresh failed:', error);
                         updateApiStatus('error', 'Connection failed');
                         btn.prop('disabled', false).html('<i class="fas fa-sync-alt"></i> Refresh');
-                        alert('Failed to refresh data: ' + error);
+                        alert('Failed to refresh data. Using cached data if available.');
                     }
                 });
             });
@@ -1753,7 +1896,8 @@
                     const formattedRow = {};
                     columns.forEach(col => {
                         if (['BRREG', 'PUB', 'PUB2', 'PUB3', 'd_check_in', 'd_spr_out', 'DateOfReceive'].includes(col.key)) {
-                            formattedRow[col.header] = row[col.key] ? row[col.key].substring(0, 10) : '';
+                            // Format dates as mm/dd/yyyy
+                            formattedRow[col.header] = formatDateToMMDDYYYY(row[col.key]);
                         } else {
                             formattedRow[col.header] = row[col.key] || '';
                         }
