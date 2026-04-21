@@ -9,6 +9,7 @@ from datetime import date, datetime
 import logging
 import json
 import os
+from collections import defaultdict
 
 # Configure logging
 logging.basicConfig(
@@ -133,8 +134,29 @@ def fetch_data():
                 access_ids_seen.add(val_id)
             access_data.append(row_dict)
 
+        # Also fetch from tblPreCoord (CoordinationRequest cases tracked here)
+        precoord_query = """
+            SELECT Null AS [2d_date], BRREG, ADM, ntc_id,
+                   d_val_in, d_check_in, d_spr_out, d_complete,
+                   PUB, d_wmeeting, Null AS PUB2, Null AS PUB3,
+                   remarks, tex_remarks, CIRC, Null AS CIRC2, Null AS CIRC3,
+                   PHASE, tgt_ntc_id, Null AS subtoc, SUP,
+                   Null AS f_11_41, Null AS f_11_32A
+            FROM tblPreCoord
+            WHERE ntc_id <> 0
+        """
+        access_cursor.execute(precoord_query)
+        for row in access_cursor.fetchall():
+            row_dict = dict(zip(columns, row))
+            if row_dict.get('ntc_id'):
+                val_id = str(row_dict['ntc_id'])
+                row_dict['ntc_id'] = val_id
+                if val_id not in access_ids_seen:
+                    access_ids_seen.add(val_id)
+                    access_data.append(row_dict)
+
         access_conn.close()
-        logger.info(f"Fetched {len(access_data)} records from MS Access")
+        logger.info(f"Fetched {len(access_data)} records from MS Access (tblSpaceStnNotif + tblPreCoord)")
     except Exception as e:
         logger.error(f"Error fetching from MS Access: {e}")
         if access_conn:
@@ -143,7 +165,7 @@ def fetch_data():
 
     # Fetch from SQL Server (res908)
     sql_conn = get_sql_server_connection()
-    sql_lookup = {}
+    sql_lookup = defaultdict(list)
 
     sql_fields_lower = [
         'SatName', 'long_nom', 'ntwk_org', 'act_code', 'DateOfReceive',
@@ -167,10 +189,11 @@ def fetch_data():
             for row in sql_cursor.fetchall():
                 row_dict = dict(zip(sql_columns, row))
                 key = str(row_dict['SnsNtcId'])
-                sql_lookup[key] = row_dict
+                sql_lookup[key].append(row_dict)
 
             sql_conn.close()
-            logger.info(f"Fetched {len(sql_lookup)} records from SQL Server")
+            sql_total = sum(len(v) for v in sql_lookup.values())
+            logger.info(f"Fetched {sql_total} records from SQL Server ({len(sql_lookup)} unique SnsNtcIds)")
         except Exception as e:
             logger.error(f"Error fetching from SQL Server: {e}")
             if sql_conn:
@@ -222,52 +245,76 @@ def fetch_data():
     # Process records from Access
     for row in access_data:
         join_key = row.get('ntc_id')
-        extra_info = sql_lookup.get(join_key, {})
+        extra_list = sql_lookup.get(join_key, [])
 
         tgt_ntc_id = row.get('tgt_ntc_id')
         if tgt_ntc_id in (0, '', None):
             row['tgt_ntc_id'] = ''
 
-        merged_row = {**row, **extra_info}
+        for extra_info in extra_list:
+            merged_row = {**row, **extra_info}
 
-        for field in sql_fields_lower:
-            if field not in merged_row:
-                merged_row[field] = ""
+            for field in sql_fields_lower:
+                if field not in merged_row:
+                    merged_row[field] = ""
 
-        if is_empty_sntrack_id(merged_row.get('sntrack_id')):
-            continue
-
-        # Add Status from Submissions table via SubmissionId
-        submission_id = str(merged_row.get('SubmissionId', '')) if merged_row.get('SubmissionId') else ''
-        merged_row['Status'] = status_lookup.get(submission_id, '')
-
-        final_data.append(convert_to_serializable(merged_row))
-
-    # Add records only in SQL Server (not in Access)
-    for sql_id, sql_row in sql_lookup.items():
-        if sql_id not in access_ids_seen:
-            new_row = sql_row.copy()
-            new_row['ntc_id'] = sql_id
-
-            if 'tgt_ntc_id' in new_row:
-                tgt_ntc_id = new_row['tgt_ntc_id']
-                if tgt_ntc_id in (0, '', None):
-                    new_row['tgt_ntc_id'] = ''
-            else:
-                new_row['tgt_ntc_id'] = ''
-
-            for col in access_columns_list:
-                if col not in new_row:
-                    new_row[col] = ""
-
-            if is_empty_sntrack_id(new_row.get('sntrack_id')):
+            if is_empty_sntrack_id(merged_row.get('sntrack_id')):
                 continue
 
             # Add Status from Submissions table via SubmissionId
-            submission_id = str(new_row.get('SubmissionId', '')) if new_row.get('SubmissionId') else ''
-            new_row['Status'] = status_lookup.get(submission_id, '')
+            submission_id = str(merged_row.get('SubmissionId', '')) if merged_row.get('SubmissionId') else ''
+            merged_row['Status'] = status_lookup.get(submission_id, '')
 
-            final_data.append(convert_to_serializable(new_row))
+            final_data.append(convert_to_serializable(merged_row))
+
+    # Add records only in SQL Server (not in Access)
+    for sql_id, sql_rows in sql_lookup.items():
+        if sql_id not in access_ids_seen:
+            for sql_row in sql_rows:
+                new_row = sql_row.copy()
+                new_row['ntc_id'] = sql_id
+
+                if 'tgt_ntc_id' in new_row:
+                    tgt_ntc_id = new_row['tgt_ntc_id']
+                    if tgt_ntc_id in (0, '', None):
+                        new_row['tgt_ntc_id'] = ''
+                else:
+                    new_row['tgt_ntc_id'] = ''
+
+                for col in access_columns_list:
+                    if col not in new_row:
+                        new_row[col] = ""
+
+                if is_empty_sntrack_id(new_row.get('sntrack_id')):
+                    continue
+
+                # Add Status from Submissions table via SubmissionId
+                submission_id = str(new_row.get('SubmissionId', '')) if new_row.get('SubmissionId') else ''
+                new_row['Status'] = status_lookup.get(submission_id, '')
+
+                final_data.append(convert_to_serializable(new_row))
+
+    # Propagate Access data to SQL-only records sharing the same sntrack_id
+    sntrack_to_access = {}
+    access_propagation_fields = [
+        '2d_date', 'BRREG', 'ADM', 'd_val_in', 'd_check_in',
+        'd_spr_out', 'd_complete', 'PUB', 'd_wmeeting', 'PUB2', 'PUB3',
+        'remarks', 'tex_remarks', 'CIRC', 'CIRC2', 'CIRC3', 'PHASE',
+        'subtoc', 'SUP', 'f_11_41', 'f_11_32A'
+    ]
+    for row in final_data:
+        st_id = row.get('sntrack_id')
+        if st_id and not is_empty_sntrack_id(st_id) and st_id not in sntrack_to_access:
+            if any(row.get(col) not in (None, '', 'None') for col in access_propagation_fields):
+                sntrack_to_access[st_id] = {col: row.get(col, '') for col in access_propagation_fields}
+
+    for row in final_data:
+        st_id = row.get('sntrack_id')
+        if st_id and st_id in sntrack_to_access:
+            if not any(row.get(col) not in (None, '', 'None') for col in access_propagation_fields):
+                for col in access_propagation_fields:
+                    if row.get(col) in (None, '', 'None'):
+                        row[col] = sntrack_to_access[st_id].get(col, '')
 
     logger.info(f"Total merged records: {len(final_data)}")
     return final_data, None
