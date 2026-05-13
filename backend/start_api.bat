@@ -26,5 +26,20 @@ echo.
 echo Starting HTTPS API on https://156.106.168.185:5001
 echo Open that URL in browser once and click Advanced - Proceed to trust the cert.
 echo.
+
+:: ── Kill any process already holding port 5001 ───────────────────────────
+echo Checking if port 5001 is in use...
+for /f "tokens=5" %%P in ('netstat -ano ^| findstr /R "\<5001\>" ^| findstr LISTENING') do (
+    echo Port 5001 is occupied by PID %%P. Terminating...
+    taskkill /PID %%P /F >nul 2>&1
+    if errorlevel 1 (
+        echo   Warning: Could not kill PID %%P. It may have already exited.
+    ) else (
+        echo   PID %%P terminated successfully.
+    )
+)
+echo Port 5001 is now free. Starting API server...
+echo.
+
 python api.py
 pause
