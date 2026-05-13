@@ -290,14 +290,23 @@ def get_data():
         # Save a local cache for offline fallback
         now_iso = datetime.now().isoformat()
         cache_payload = {'generated_at': now_iso, 'data': data}
-        cache_path = os.path.join(FRONTEND_DIR, 'data', 'cached_data.json')
-        try:
-            os.makedirs(os.path.dirname(cache_path), exist_ok=True)
-            with open(cache_path, 'w', encoding='utf-8') as _cf:
-                json.dump(cache_payload, _cf, ensure_ascii=False)
-            logger.info(f"Cache saved to {cache_path}")
-        except Exception as _ce:
-            logger.warning(f"Could not save cache: {_ce}")
+
+        # Write to multiple locations so both Flask-served and IIS-served frontends
+        # can fall back to cached data when the backend is offline.
+        cache_targets = [
+            # 1. Local path – served by Flask at /data/cached_data.json
+            os.path.join(FRONTEND_DIR, 'data', 'cached_data.json'),
+            # 2. IIS file-share path – served as a static file by IIS
+            r'\\intweb.itu.int\intwebroot\ITU-R\space\css\notification\data\cached_data.json',
+        ]
+        for cache_path in cache_targets:
+            try:
+                os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+                with open(cache_path, 'w', encoding='utf-8') as _cf:
+                    json.dump(cache_payload, _cf, ensure_ascii=False)
+                logger.info(f"Cache saved to {cache_path}")
+            except Exception as _ce:
+                logger.warning(f"Could not save cache to {cache_path}: {_ce}")
 
         return jsonify({
             'success': True,
