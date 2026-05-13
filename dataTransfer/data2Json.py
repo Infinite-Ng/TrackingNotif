@@ -26,7 +26,7 @@ def get_mdb_connection(path, mdw_path, username, password):
         # for driver in pyodbc.drivers():
         #     print(driver)
         # print(driver := pyodbc.drivers())
-        conn_str = f'DRIVER={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={path};SystemDB={mdw_path};UID={username};PWD={password};'
+        conn_str = f'DRIVER={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={path};SystemDB={mdw_path};UID={username};PWD={password};ReadOnly=1;'
         conn = pyodbc.connect(conn_str)
         logger.info(f"Successfully connected to MDB database: {path}")
         return conn

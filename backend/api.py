@@ -2,8 +2,10 @@
 Flask API Backend for ITU Notice Tracking System
 Provides real-time data from SQL Server and MS Access databases
 """
+import json
+import os
 import pyodbc
-from flask import Flask, jsonify
+from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
 from datetime import date, datetime
 import logging
@@ -17,6 +19,9 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
+
+# --- Frontend directory ---
+FRONTEND_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'frontend')
 
 # --- Configuration ---
 TRACKING_MDB_PATH = r'M:\BR_DATA\SPACE\SNTRACK\sntrdat.mdb'
@@ -41,6 +46,7 @@ def get_mdb_connection():
             f'SystemDB={MDW_FILE};'
             f'UID={MDB_USERNAME};'
             f'PWD={MDB_PASSWORD};'
+            f'ReadOnly=1;'
         )
         conn = pyodbc.connect(conn_str)
         logger.info(f"Successfully connected to MDB database: {TRACKING_MDB_PATH}")
@@ -280,11 +286,23 @@ def get_data():
                 'error': error,
                 'data': []
             }), 500
-        
+
+        # Save a local cache for offline fallback
+        now_iso = datetime.now().isoformat()
+        cache_payload = {'generated_at': now_iso, 'data': data}
+        cache_path = os.path.join(FRONTEND_DIR, 'data', 'cached_data.json')
+        try:
+            os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+            with open(cache_path, 'w', encoding='utf-8') as _cf:
+                json.dump(cache_payload, _cf, ensure_ascii=False)
+            logger.info(f"Cache saved to {cache_path}")
+        except Exception as _ce:
+            logger.warning(f"Could not save cache: {_ce}")
+
         return jsonify({
             'success': True,
             'count': len(data),
-            'timestamp': datetime.now().isoformat(),
+            'timestamp': now_iso,
             'data': data
         })
     except Exception as e:
@@ -305,20 +323,22 @@ def health_check():
     })
 
 
-@app.route('/', methods=['GET'])
-def index():
-    """Root endpoint with API information."""
-    return jsonify({
-        'name': 'ITU Notice Tracking API',
-        'version': '1.0.0',
-        'endpoints': {
-            '/api/data': 'GET - Fetch all tracking data',
-            '/api/health': 'GET - Health check'
-        }
-    })
+@app.route('/')
+@app.route('/index_api.html')
+def serve_main():
+    """Serve the main frontend page."""
+    return send_from_directory(FRONTEND_DIR, 'index_api.html')
+
+
+@app.route('/<path:filename>')
+def serve_frontend(filename):
+    """Serve frontend static files (HTML, data, etc.)."""
+    return send_from_directory(FRONTEND_DIR, filename)
 
 
 if __name__ == '__main__':
-    # Run the Flask development server
-    # For production, use a WSGI server like gunicorn
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    cert_file = os.path.join(BASE_DIR, 'cert.pem')
+    key_file  = os.path.join(BASE_DIR, 'key.pem')
+    ssl_ctx = (cert_file, key_file) if os.path.exists(cert_file) and os.path.exists(key_file) else None
+    app.run(host='0.0.0.0', port=5001, debug=False, threaded=True, ssl_context=ssl_ctx)
