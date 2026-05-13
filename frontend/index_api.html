@@ -700,9 +700,16 @@
                             <div class="chip-dropdown-divider" id="chipTypeToggleAll">&#9745; Select All / Deselect All</div>
                         </div>
                     </div>
-                    <select id="bigFilter_Status" class="form-select-custom" onchange="handleSelectColor(this)" title="Filter by Status">
-                        <option value="">Status: All</option>
-                    </select>
+                    <!-- Chip-style Status multi-select -->
+                    <div class="chip-multiselect-wrapper" id="chipStatusWrapper">
+                        <div class="chip-multiselect-box" id="chipStatusBox">
+                            <span class="chip-multiselect-placeholder" id="chipStatusPlaceholder">Status: All</span>
+                            <button class="chip-clear-all" id="chipStatusClearAll" title="Clear all" tabindex="-1">&#10005;</button>
+                        </div>
+                        <div class="chip-dropdown-menu" id="chipStatusDropdown">
+                            <div class="chip-dropdown-divider" id="chipStatusToggleAll">&#9745; Select All / Deselect All</div>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="filter-group-row">
@@ -1587,6 +1594,9 @@
                             if (val) typeSet.add(val);
                         });
                         var allTypes = Array.from(typeSet);
+                        // Populate global and build chip filter
+                        allTypeOfSubmissions = allTypes;
+                        buildBigTypeFilter();
 
                         var $menu = $multiSelect.find('#typeOfSubmissionMenu');
                         
@@ -1598,17 +1608,11 @@
                             e.stopPropagation();
                             var allChecked = selectedTypeOfSubmissions.length === allTypes.length;
                             if (allChecked) {
-                                // Deselect all
                                 selectedTypeOfSubmissions = [];
-                                $menu.find('input[type="checkbox"]').prop('checked', false);
-                                $menu.find('.multi-select-item').removeClass('selected');
                             } else {
-                                // Select all
                                 selectedTypeOfSubmissions = [...allTypes];
-                                $menu.find('input[type="checkbox"]').prop('checked', true);
-                                $menu.find('.multi-select-item').addClass('selected');
                             }
-                            updateBtnText();
+                            syncTypeFilterUI();
                             api.draw();
                         });
                         
@@ -1659,7 +1663,7 @@
                                 selectedTypeOfSubmissions = selectedTypeOfSubmissions.filter(function(v) { return v !== val; });
                                 $item.removeClass('selected');
                             }
-                            updateBtnText();
+                            syncTypeFilterUI();
                             api.draw();
                         });
 
@@ -1669,8 +1673,8 @@
                                 $('.multi-select-menu').removeClass('show');
                             }
                             if (!$(e.target).closest('.chip-multiselect-wrapper').length) {
-                                $('#chipTypeDropdown').removeClass('show');
-                                $('#chipTypeBox').removeClass('open');
+                                $('#chipTypeDropdown, #chipStatusDropdown').removeClass('show');
+                                $('#chipTypeBox, #chipStatusBox').removeClass('open');
                             }
                         });
 
@@ -1691,6 +1695,8 @@
                         statusSet.add('');
                         allStatuses = Array.from(statusSet).sort();
                         selectedStatuses = [...allStatuses]; // Default: all selected
+                        // Build top-bar chip filter
+                        buildBigStatusFilter();
 
                         var $menu = $multiSelect.find('#statusMenu');
                         
@@ -1700,19 +1706,12 @@
                         $menu.append($toggleAll);
                         $toggleAll.on('click', function(e) {
                             e.stopPropagation();
-                            var allChecked = selectedStatuses.length === allStatuses.length;
-                            if (allChecked) {
-                                // Deselect all
+                            if (selectedStatuses.length === allStatuses.length) {
                                 selectedStatuses = [];
-                                $menu.find('input[type="checkbox"]').prop('checked', false);
-                                $menu.find('.multi-select-item').removeClass('selected');
                             } else {
-                                // Select all
                                 selectedStatuses = [...allStatuses];
-                                $menu.find('input[type="checkbox"]').prop('checked', true);
-                                $menu.find('.multi-select-item').addClass('selected');
                             }
-                            updateStatusBtnText();
+                            syncStatusFilterUI();
                             api.draw();
                         });
                         
@@ -1724,19 +1723,6 @@
                                 '</label>');
                             $menu.append($item);
                         });
-
-                        function updateStatusBtnText() {
-                            var count = selectedStatuses.length;
-                            if (count === 0) {
-                                $('#statusBtn').text('None');
-                            } else if (count === allStatuses.length) {
-                                $('#statusBtn').text('All (' + count + ')');
-                            } else {
-                                var display = selectedStatuses.slice(0, 2).map(function(s) { return s === '' ? '(empty)' : s; });
-                                $('#statusBtn').text(display.join(', ') + (count > 2 ? ' +' + (count - 2) : ''));
-                            }
-                        }
-                        updateStatusBtnText();
 
                         $multiSelect.find('#statusBtn').on('click', function(e) {
                             e.stopPropagation();
@@ -1754,7 +1740,7 @@
                                 selectedStatuses = selectedStatuses.filter(function(v) { return v !== val; });
                                 $item.removeClass('selected');
                             }
-                            updateStatusBtnText();
+                            syncStatusFilterUI();
                             api.draw();
                         });
 
@@ -1816,19 +1802,115 @@
                 });
             }
 
-            // Populate Status big filter from data
-            function populateStatusFilter(data) {
-                var statusSet = new Set();
-                data.forEach(function(row) {
-                    if (row.Status) statusSet.add(row.Status);
+            // Sync Status chip box + in-table Status menu to selectedStatuses
+            function syncStatusFilterUI() {
+                var count = selectedStatuses.length;
+                var total = allStatuses.length;
+
+                // Rebuild chip box
+                var $box = $('#chipStatusBox');
+                $box.find('.chip-tag').remove();
+                var $placeholder = $('#chipStatusPlaceholder');
+                var $clearBtn = $('#chipStatusClearAll').detach();
+                if (count === 0) {
+                    $placeholder.show().text('Status: None');
+                    $box.removeClass('has-chips');
+                } else if (count === total) {
+                    $placeholder.show().text('Status: All (' + total + ')');
+                    $box.removeClass('has-chips');
+                } else {
+                    $placeholder.hide();
+                    $box.addClass('has-chips');
+                    selectedStatuses.forEach(function(status) {
+                        var label = status === '' ? '(empty)' : status;
+                        var $chip = $('<span class="chip-tag"></span>').text(label);
+                        var $rm = $('<button class="chip-tag-remove" title="Remove">&#10005;</button>');
+                        $rm.on('click', function(e) {
+                            e.stopPropagation();
+                            selectedStatuses = selectedStatuses.filter(function(v) { return v !== status; });
+                            syncStatusFilterUI();
+                            if (table) table.draw();
+                        });
+                        $chip.append($rm);
+                        $box.append($chip);
+                    });
+                }
+                $box.append($clearBtn);
+
+                // Sync in-table Status checkboxes
+                $('#statusMenu').find('input[type="checkbox"]').each(function() {
+                    var checked = selectedStatuses.includes($(this).val());
+                    $(this).prop('checked', checked);
+                    $(this).closest('.multi-select-item').toggleClass('selected', checked);
                 });
-                var $select = $('#bigFilter_Status');
-                // Remove old options except the first (All)
-                $select.find('option:not(:first)').remove();
-                Array.from(statusSet).sort().forEach(function(status) {
-                    $select.append('<option value="' + status + '">' + status + '</option>');
-                });
+                // Sync in-table button text
+                if (count === 0) {
+                    $('#statusBtn').text('None');
+                } else if (count === total) {
+                    $('#statusBtn').text('All (' + count + ')');
+                } else {
+                    var display = selectedStatuses.slice(0, 2).map(function(s) { return s === '' ? '(empty)' : s; });
+                    $('#statusBtn').text(display.join(', ') + (count > 2 ? ' +' + (count - 2) : ''));
+                }
             }
+
+            // Build the chip-style Status dropdown
+            function buildBigStatusFilter() {
+                var $dropdown = $('#chipStatusDropdown');
+                $dropdown.find('.chip-dropdown-item').remove();
+
+                allStatuses.forEach(function(status) {
+                    var label = status === '' ? '(empty)' : status;
+                    var isChecked = selectedStatuses.includes(status);
+                    var $item = $('<label class="chip-dropdown-item' + (isChecked ? ' selected' : '') + '">' +
+                        '<input type="checkbox" value="' + status + '"' + (isChecked ? ' checked' : '') + '>' +
+                        '<span>' + label + '</span>' +
+                        '</label>');
+                    $item.find('input').on('change', function(e) {
+                        e.stopPropagation();
+                        var val = $(this).val();
+                        if ($(this).is(':checked')) {
+                            if (!selectedStatuses.includes(val)) selectedStatuses.push(val);
+                            $item.addClass('selected');
+                        } else {
+                            selectedStatuses = selectedStatuses.filter(function(v) { return v !== val; });
+                            $item.removeClass('selected');
+                        }
+                        syncStatusFilterUI();
+                        if (table) table.draw();
+                    });
+                    $dropdown.append($item);
+                });
+
+                $('#chipStatusToggleAll').off('click').on('click', function(e) {
+                    e.stopPropagation();
+                    if (selectedStatuses.length === allStatuses.length) {
+                        selectedStatuses = [];
+                    } else {
+                        selectedStatuses = [...allStatuses];
+                    }
+                    syncStatusFilterUI();
+                    if (table) table.draw();
+                });
+
+                $('#chipStatusBox').off('click').on('click', function(e) {
+                    e.stopPropagation();
+                    $('#chipStatusDropdown').toggleClass('show');
+                    $(this).toggleClass('open');
+                });
+
+                $('#chipStatusClearAll').off('click').on('click', function(e) {
+                    e.stopPropagation();
+                    selectedStatuses = [];
+                    syncStatusFilterUI();
+                    if (table) table.draw();
+                });
+
+                syncStatusFilterUI();
+            }
+
+            // (legacy – kept for call sites; now a no-op since chip is built from buildBigStatusFilter)
+            function populateStatusFilter(data) {}
 
             // Sync both TypeOfSubmission filter UIs to selectedTypeOfSubmissions
             function syncTypeFilterUI() {
@@ -1999,15 +2081,7 @@
                 table.column(13).search(val ? '^' + $.fn.dataTable.util.escapeRegex(val) + '$' : '', true, false).draw();
             });
 
-            // Big filter: Status
-            $('#bigFilter_Status').on('change', function() {
-                var val = $(this).val();
-                if (val) {
-                    table.column(11).search('^' + $.fn.dataTable.util.escapeRegex(val) + '$', true, false).draw();
-                } else {
-                    table.column(11).search('').draw();
-                }
-            });
+            // Status is now fully handled by selectedStatuses via ext.search; no direct column search needed.
 
             // Date filters trigger redraw
             $('#filter_date_start, #filter_date_end, #filter_brreg_start, #filter_brreg_end').on('change', function() {
@@ -2071,10 +2145,7 @@
                 $('#searchInput').val('');
                 $('.column-filter').val('');
                 $('.column-filter-date input').val('');
-                // Reset big filter Status select
-                $('#bigFilter_Status').val('').removeClass('has-value');
-
-                // Reset TypeOfSubmission multi-select to default (syncs both big filter and in-table)
+                // Reset TypeOfSubmission to default (syncs chip box + in-table)
                 selectedTypeOfSubmissions = [...defaultSelectedTypes];
                 syncTypeFilterUI();
 
@@ -2094,13 +2165,9 @@
                 });
                 $('#supBtn').text('All (' + allSUPs.length + ')');
 
-                // Reset Status multi-select to all selected
+                // Reset Status to all selected (syncs chip box + in-table)
                 selectedStatuses = [...allStatuses];
-                $('#statusMenu').find('input[type="checkbox"]').each(function() {
-                    $(this).prop('checked', true);
-                    $(this).closest('.multi-select-item').addClass('selected');
-                });
-                $('#statusBtn').text('All (' + allStatuses.length + ')');
+                syncStatusFilterUI();
                 
                 table.columns().search('');
                 table.search('');
