@@ -431,7 +431,7 @@
             background-color: #dc3545;
         }
 
-        /* Multi-select dropdown for TypeOfSubmission */
+        /* ===== Multi-select dropdown (in-table column header) ===== */
         .multi-select-dropdown {
             position: relative;
             display: inline-block;
@@ -462,14 +462,14 @@
             position: absolute;
             top: 100%;
             left: 0;
-            z-index: 1000;
-            min-width: 120px;
+            z-index: 1050;
+            min-width: 160px;
             background: white;
             border: 1px solid #dee2e6;
             border-radius: 4px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
             padding: 4px 0;
-            max-height: 200px;
+            max-height: 220px;
             overflow-y: auto;
         }
 
@@ -483,6 +483,7 @@
             padding: 4px 8px;
             cursor: pointer;
             font-size: 0.7rem;
+            user-select: none;
         }
 
         .multi-select-item:hover {
@@ -491,10 +492,156 @@
 
         .multi-select-item input {
             margin-right: 6px;
+            flex-shrink: 0;
         }
 
         .multi-select-item.selected {
             background-color: var(--itu-blue-light);
+        }
+
+        /* ===== Chip-style TypeOfSubmission filter (top filter bar) ===== */
+        .chip-multiselect-wrapper {
+            position: relative;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .chip-multiselect-box {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 28px 4px 8px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            background: white;
+            cursor: pointer;
+            min-height: 38px;
+            position: relative;
+            transition: border-color 0.15s;
+        }
+
+        .chip-multiselect-box:hover,
+        .chip-multiselect-box.open {
+            border-color: var(--itu-blue);
+        }
+
+        .chip-tag {
+            display: inline-flex;
+            align-items: center;
+            background: #e9ecef;
+            border: 1px solid #ced4da;
+            border-radius: 3px;
+            padding: 2px 4px 2px 7px;
+            font-size: 0.78rem;
+            color: #333;
+            gap: 4px;
+            white-space: nowrap;
+        }
+
+        .chip-tag-remove {
+            cursor: pointer;
+            color: #6c757d;
+            font-size: 0.75rem;
+            line-height: 1;
+            padding: 0 2px;
+            border-radius: 2px;
+            border: none;
+            background: none;
+        }
+
+        .chip-tag-remove:hover {
+            background: #c9303040;
+            color: #c93030;
+        }
+
+        .chip-clear-all {
+            position: absolute;
+            right: 6px;
+            top: 50%;
+            transform: translateY(-50%);
+            cursor: pointer;
+            color: #aaa;
+            font-size: 0.85rem;
+            line-height: 1;
+            padding: 2px 3px;
+            border-radius: 2px;
+            background: none;
+            border: none;
+            display: none;
+        }
+
+        .chip-clear-all:hover {
+            color: #666;
+        }
+
+        .chip-multiselect-box.has-chips .chip-clear-all {
+            display: block;
+        }
+
+        .chip-multiselect-placeholder {
+            color: var(--placeholder-gray);
+            font-size: 0.9rem;
+            pointer-events: none;
+        }
+
+        .chip-dropdown-menu {
+            display: none;
+            position: absolute;
+            top: calc(100% + 2px);
+            left: 0;
+            right: 0;
+            z-index: 1060;
+            background: white;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+            padding: 4px 0;
+            max-height: 260px;
+            overflow-y: auto;
+        }
+
+        .chip-dropdown-menu.show {
+            display: block;
+        }
+
+        .chip-dropdown-item {
+            display: flex;
+            align-items: center;
+            padding: 6px 12px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            user-select: none;
+            gap: 8px;
+        }
+
+        .chip-dropdown-item:hover {
+            background-color: var(--itu-blue-light);
+        }
+
+        .chip-dropdown-item.selected {
+            background-color: var(--itu-blue-light);
+        }
+
+        .chip-dropdown-item input[type="checkbox"] {
+            width: 14px;
+            height: 14px;
+            flex-shrink: 0;
+            accent-color: var(--itu-blue);
+            cursor: pointer;
+        }
+
+        .chip-dropdown-divider {
+            padding: 5px 12px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            color: var(--itu-blue);
+            border-bottom: 1px solid #dee2e6;
+            cursor: pointer;
+        }
+
+        .chip-dropdown-divider:hover {
+            background: var(--itu-blue-light);
         }
     </style>
 </head>
@@ -543,9 +690,15 @@
                 </div>
 
                 <div class="filter-group-row">
-                    <div class="multi-select-dropdown" style="flex:1; min-width:0;">
-                        <button type="button" class="form-select-custom multi-select-btn" id="bigTypeFilterBtn" style="width:100%; text-align:left; font-weight:normal;" title="Filter by Type of Submission">Type: NotifSS, ResubSS</button>
-                        <div class="multi-select-menu" id="bigTypeFilterMenu"></div>
+                    <!-- Chip-style TypeOfSubmission multi-select -->
+                    <div class="chip-multiselect-wrapper">
+                        <div class="chip-multiselect-box" id="chipTypeBox">
+                            <span class="chip-multiselect-placeholder" id="chipTypePlaceholder" style="display:none;">Type of Submission: All</span>
+                            <button class="chip-clear-all" id="chipTypeClearAll" title="Clear all" tabindex="-1">&#10005;</button>
+                        </div>
+                        <div class="chip-dropdown-menu" id="chipTypeDropdown">
+                            <div class="chip-dropdown-divider" id="chipTypeToggleAll">&#9745; Select All / Deselect All</div>
+                        </div>
                     </div>
                     <select id="bigFilter_Status" class="form-select-custom" onchange="handleSelectColor(this)" title="Filter by Status">
                         <option value="">Status: All</option>
@@ -632,9 +785,10 @@
         // ==========================================
         // API Configuration
         // ==========================================
-        // Uses window.location.origin so requests always go to the same server
-        // the page was loaded from (works regardless of IP or hostname).
-        const API_BASE_URL = window.location.origin;
+        // When served from Flask on port 5001, use same origin.
+        // When opened from a file share / IIS (any other origin), fall back to the hardcoded backend URL.
+        const BACKEND_URL = 'https://156.106.168.185:5001';
+        const API_BASE_URL = (window.location.port === '5001') ? window.location.origin : BACKEND_URL;
         const API_DATA_ENDPOINT = API_BASE_URL + '/api/data';
         const API_HEALTH_ENDPOINT = API_BASE_URL + '/api/health';
 
@@ -1514,6 +1668,10 @@
                             if (!$(e.target).closest('.multi-select-dropdown').length) {
                                 $('.multi-select-menu').removeClass('show');
                             }
+                            if (!$(e.target).closest('.chip-multiselect-wrapper').length) {
+                                $('#chipTypeDropdown').removeClass('show');
+                                $('#chipTypeBox').removeClass('open');
+                            }
                         });
 
                     } else if (dataSrc === 'Status') {
@@ -1677,22 +1835,42 @@
                 var count = selectedTypeOfSubmissions.length;
                 var total = allTypeOfSubmissions.length;
 
-                // --- Big top filter ---
-                $('#bigTypeFilterMenu').find('input[type="checkbox"]').each(function() {
-                    var checked = selectedTypeOfSubmissions.includes($(this).val());
-                    $(this).prop('checked', checked);
-                    $(this).closest('.multi-select-item').toggleClass('selected', checked);
-                });
+                // --- Chip box: rebuild chips ---
+                var $box = $('#chipTypeBox');
+                $box.find('.chip-tag').remove();
+                var $placeholder = $('#chipTypePlaceholder');
+                var $clearAll   = $('#chipTypeClearAll');
+                var $clearAllOuter = $clearAll.detach(); // keep the button but remove from DOM temporarily
+
                 if (count === 0) {
-                    $('#bigTypeFilterBtn').text('Type: None');
-                } else if (count === total) {
-                    $('#bigTypeFilterBtn').text('Type: All (' + count + ')');
+                    $placeholder.show();
+                    $box.removeClass('has-chips');
                 } else {
-                    var bigNames = selectedTypeOfSubmissions.slice(0, 2).map(getTypeShortName);
-                    var bigText = 'Type: ' + bigNames.join(', ');
-                    if (count > 2) bigText += ' +' + (count - 2);
-                    $('#bigTypeFilterBtn').text(bigText);
+                    $placeholder.hide();
+                    $box.addClass('has-chips');
+                    var displayTypes = (count === total) ? ['(All ' + total + ')'] : selectedTypeOfSubmissions;
+                    displayTypes.forEach(function(type) {
+                        var label = (count === total) ? type : getTypeShortName(type);
+                        var $chip = $('<span class="chip-tag"></span>');
+                        $chip.text(label);
+                        if (count !== total) {
+                            var $rm = $('<button class="chip-tag-remove" title="Remove">&#10005;</button>');
+                            $rm.on('click', function(e) {
+                                e.stopPropagation();
+                                selectedTypeOfSubmissions = selectedTypeOfSubmissions.filter(function(v) { return v !== type; });
+                                syncTypeFilterUI();
+                                syncChipDropdown();
+                                if (table) table.draw();
+                            });
+                            $chip.append($rm);
+                        }
+                        $box.append($chip);
+                    });
                 }
+                $box.append($clearAllOuter);
+
+                // --- Chip dropdown checkboxes ---
+                syncChipDropdown();
 
                 // --- In-table column filter ---
                 $('#typeOfSubmissionMenu').find('input[type="checkbox"]').each(function() {
@@ -1712,32 +1890,31 @@
                 }
             }
 
-            // Build the big TypeOfSubmission multi-select dropdown
-            function buildBigTypeFilter() {
-                var $menu = $('#bigTypeFilterMenu');
-                $menu.empty();
-
-                var $toggleAll = $('<div class="multi-select-toggle-all" style="padding: 4px 8px; border-bottom: 1px solid #dee2e6; cursor: pointer; font-size: 0.7rem; font-weight: bold; color: var(--itu-blue);">&#9745; Select All / Deselect All</div>');
-                $menu.append($toggleAll);
-                $toggleAll.on('click', function(e) {
-                    e.stopPropagation();
-                    if (selectedTypeOfSubmissions.length === allTypeOfSubmissions.length) {
-                        selectedTypeOfSubmissions = [];
-                    } else {
-                        selectedTypeOfSubmissions = [...allTypeOfSubmissions];
-                    }
-                    syncTypeFilterUI();
-                    if (table) table.draw();
+            // Sync chip dropdown checkbox states only
+            function syncChipDropdown() {
+                var count = selectedTypeOfSubmissions.length;
+                $('#chipTypeDropdown').find('input[type="checkbox"]').each(function() {
+                    var checked = selectedTypeOfSubmissions.includes($(this).val());
+                    $(this).prop('checked', checked);
+                    $(this).closest('.chip-dropdown-item').toggleClass('selected', checked);
                 });
+            }
+
+            // Build the chip-style TypeOfSubmission dropdown
+            function buildBigTypeFilter() {
+                var $dropdown = $('#chipTypeDropdown');
+                // Remove old options (keep the toggle-all header)
+                $dropdown.find('.chip-dropdown-item').remove();
 
                 allTypeOfSubmissions.forEach(function(type) {
                     var shortName = getTypeShortName(type);
                     var isChecked = selectedTypeOfSubmissions.includes(type);
-                    var $item = $('<label class="multi-select-item' + (isChecked ? ' selected' : '') + '">' +
+                    var $item = $('<label class="chip-dropdown-item' + (isChecked ? ' selected' : '') + '">' +
                         '<input type="checkbox" value="' + type + '"' + (isChecked ? ' checked' : '') + '>' +
-                        '<span>' + shortName + '</span>' +
+                        '<span>' + shortName + ' <small style="color:#888">(' + type + ')</small>' + '</span>' +
                         '</label>');
-                    $item.find('input').on('change', function() {
+                    $item.find('input').on('change', function(e) {
+                        e.stopPropagation();
                         var val = $(this).val();
                         if ($(this).is(':checked')) {
                             if (!selectedTypeOfSubmissions.includes(val)) selectedTypeOfSubmissions.push(val);
@@ -1749,13 +1926,34 @@
                         syncTypeFilterUI();
                         if (table) table.draw();
                     });
-                    $menu.append($item);
+                    $dropdown.append($item);
                 });
 
-                $('#bigTypeFilterBtn').off('click').on('click', function(e) {
+                // Toggle-all click
+                $('#chipTypeToggleAll').off('click').on('click', function(e) {
                     e.stopPropagation();
-                    $('.multi-select-menu').not('#bigTypeFilterMenu').removeClass('show');
-                    $('#bigTypeFilterMenu').toggleClass('show');
+                    if (selectedTypeOfSubmissions.length === allTypeOfSubmissions.length) {
+                        selectedTypeOfSubmissions = [];
+                    } else {
+                        selectedTypeOfSubmissions = [...allTypeOfSubmissions];
+                    }
+                    syncTypeFilterUI();
+                    if (table) table.draw();
+                });
+
+                // Box click → open/close dropdown
+                $('#chipTypeBox').off('click').on('click', function(e) {
+                    e.stopPropagation();
+                    $('#chipTypeDropdown').toggleClass('show');
+                    $(this).toggleClass('open');
+                });
+
+                // Clear-all button
+                $('#chipTypeClearAll').off('click').on('click', function(e) {
+                    e.stopPropagation();
+                    selectedTypeOfSubmissions = [];
+                    syncTypeFilterUI();
+                    if (table) table.draw();
                 });
 
                 syncTypeFilterUI();
