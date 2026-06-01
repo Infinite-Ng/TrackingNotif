@@ -662,7 +662,7 @@
 
     <div class="header-area">
         <img src="./logo-itu-slogan.svg" class="header-logo" alt="ITU Logo">
-        <div class="header-title">Space Services Department - Notice Tracking</div>
+        <div class="header-title">Notice Tracking</div>
         <div id="apiStatus" class="api-status">
             <span class="status-dot"></span>
             <span class="status-text">Connecting...</span>
@@ -2178,46 +2178,45 @@
             $('#downloadBtn').on('click', function() {
                 const filteredData = table.rows({ search: 'applied' }).data().toArray();
 
-                const columns = [
-                    { key: 'sntrack_id', header: 'SNTrack ID' },
-                    { key: 'ADM', header: 'ADM' },
-                    { key: 'ntwk_org', header: 'ntwk_org' },
-                    { key: 'ntc_id', header: 'Notice ID' },
-                    { key: 'SatName', header: 'SatName' },
-                    { key: 'long_nom', header: 'long_nom' },
-                    { key: 'BRREG', header: 'BRReg' },
-                    { key: 'DateOfReceive', header: 'DateOfReceive' },
-                    { key: 'tgt_ntc_id', header: 'tgt_ntc_id' },
-                    { key: 'SUP', header: 'SUP' },
-                    { key: 'act_code', header: 'act_code' },
-                    { key: 'TypeOfSubmission', header: 'TypeOfSubmission' },
-                    { key: 'Status', header: 'Status' },
-                    { key: 'PHASE', header: 'PHASE' },
-                    { key: 'f_11_32A', header: 'Prov 11.32A' },
-                    { key: 'f_11_41', header: 'Prov 11.41' },
-                    { key: 'subtoc', header: 'subtoc' },
-                    { key: 'd_check_in', header: 'd_check_in' },
-                    { key: 'd_spr_out', header: 'd_spr_out' },
-                    { key: 'CIRC', header: 'CIRC' },
-                    { key: 'PUB', header: 'pub' },
-                    { key: 'CIRC2', header: 'CIRC2' },
-                    { key: 'PUB2', header: 'pub2' },
-                    { key: 'CIRC3', header: 'CIRC3' },
-                    { key: 'PUB3', header: 'pub3' },
-                    { key: 'InternalReference', header: 'InternalReference' },
-                    { key: 'remarks', header: 'remarks' }
-                ];
+                // Date fields rendered as dd.mm.yyyy in export
+                const dateFields = new Set(['BRREG', 'DateOfReceive', 'd_check_in', 'd_spr_out', 'PUB', 'PUB2', 'PUB3']);
 
-                const exportData = filteredData.map(row => {
-                    const formattedRow = {};
-                    columns.forEach(col => {
-                        if (['BRREG', 'PUB', 'PUB2', 'PUB3', 'd_check_in', 'd_spr_out', 'DateOfReceive'].includes(col.key)) {
-                            formattedRow[col.header] = row[col.key] ? row[col.key].substring(0, 10) : '';
+                function fmtExportDate(data) {
+                    if (!data) return '';
+                    var s = String(data).substring(0, 10);
+                    var p = s.split('-');
+                    if (p.length === 3) return p[2] + '.' + p[1] + '.' + p[0];
+                    return s;
+                }
+
+                // Only export currently visible columns, in their current order
+                const visibleCols = columnConfig
+                    .map(function(col, idx) { return { col: col, idx: idx }; })
+                    .filter(function(item) { return columnVisibility[item.idx]; });
+
+                const exportData = filteredData.map(function(row) {
+                    var out = {};
+                    visibleCols.forEach(function(item) {
+                        var key = item.col.data;
+                        var header = item.col.title;
+                        var val = row[key];
+                        if (dateFields.has(key)) {
+                            val = fmtExportDate(val);
+                        } else if (key === 'TypeOfSubmission') {
+                            val = getTypeShortName(val) || val || '';
+                        } else if (key === 'long_nom') {
+                            if (val !== null && val !== undefined && val !== '') {
+                                var n = parseFloat(val);
+                                val = isNaN(n) ? val : (Math.round(n * 10) / 10).toString();
+                            } else {
+                                val = '';
+                            }
                         } else {
-                            formattedRow[col.header] = row[col.key] || '';
+                            val = (val !== null && val !== undefined) ? val : '';
                         }
+                        out[header] = val;
                     });
-                    return formattedRow;
+                    return out;
                 });
 
                 const ws = XLSX.utils.json_to_sheet(exportData);

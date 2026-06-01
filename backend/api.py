@@ -4,6 +4,8 @@ Provides real-time data from SQL Server and MS Access databases
 """
 import json
 import os
+import shutil
+import time
 import pyodbc
 from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
@@ -24,10 +26,38 @@ CORS(app)  # Enable CORS for all routes
 FRONTEND_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'frontend')
 
 # --- Configuration ---
-TRACKING_MDB_PATH = r'M:\BR_DATA\SPACE\SNTRACK\sntrdat.mdb'
-MDW_FILE = r'M:\BR_DATA\SPACE\SNTRACK\sntrapp.mdw'
+# Network source paths – use UNC so the admin-elevated process can reach them
+# (mapped drive letters like M: are not visible in elevated sessions)
+_NET_MDB = r'\\blue\dfs\br\BR_DATA\SPACE\SNTRACK\sntrdat.mdb'
+_NET_MDW = r'\\blue\dfs\br\BR_DATA\SPACE\SNTRACK\sntrapp.mdw'
 MDB_USERNAME = 'spruser01'
 MDB_PASSWORD = 'spruser01'
+
+# Local data directory – files here are used for all connections.
+# Manually pre-seeded; auto-refreshed on every /api/data request.
+LOCAL_DATA_DIR = r'C:\Users\xianwu\Desktop\codingSpace\TrackingNotif\data'
+LOCAL_MDB_PATH = os.path.join(LOCAL_DATA_DIR, 'sntrdat.mdb')
+LOCAL_MDW_PATH = os.path.join(LOCAL_DATA_DIR, 'sntrapp.mdw')
+
+
+def _sync_local_files():
+    """Try to copy the latest MDB and MDW files from the network to LOCAL_DATA_DIR.
+    Falls back silently if the network copy is locked or unreachable – the
+    existing local copies will be used instead."""
+    os.makedirs(LOCAL_DATA_DIR, exist_ok=True)
+    for src, dst, label in [
+        (_NET_MDB, LOCAL_MDB_PATH, 'MDB'),
+        (_NET_MDW, LOCAL_MDW_PATH, 'MDW'),
+    ]:
+        try:
+            shutil.copy2(src, dst)
+            logger.info(f"{label} synced to local: {dst}")
+        except Exception as e:
+            logger.warning(f"Could not sync {label} from network ({e}); using existing local copy.")
+
+
+# Initial sync at startup
+_sync_local_files()
 
 SQL_SERVER_CONN_STRING = (
     "DRIVER={SQL Server};"
@@ -37,23 +67,31 @@ SQL_SERVER_CONN_STRING = (
     "PWD=sns_a_5678;"
 )
 
-def get_mdb_connection():
-    """Establishes a connection to an MS Access database."""
-    try:
-        conn_str = (
-            f'DRIVER={{Microsoft Access Driver (*.mdb, *.accdb)}};'
-            f'DBQ={TRACKING_MDB_PATH};'
-            f'SystemDB={MDW_FILE};'
-            f'UID={MDB_USERNAME};'
-            f'PWD={MDB_PASSWORD};'
-            f'ReadOnly=1;'
-        )
-        conn = pyodbc.connect(conn_str)
-        logger.info(f"Successfully connected to MDB database: {TRACKING_MDB_PATH}")
-        return conn
-    except pyodbc.Error as e:
-        logger.error(f"Error connecting to MDB database: {e}")
-        return None
+def get_mdb_connection(retries=3, delay=5):
+    """Connects to the local copy of the MDB database.
+    Syncs local files from the network first; retries on transient errors."""
+    # Refresh local copies before connecting
+    _sync_local_files()
+    conn_str = (
+        f'DRIVER={{Microsoft Access Driver (*.mdb, *.accdb)}};'
+        f'DBQ={LOCAL_MDB_PATH};'
+        f'SystemDB={LOCAL_MDW_PATH};'
+        f'UID={MDB_USERNAME};'
+        f'PWD={MDB_PASSWORD};'
+        f'ReadOnly=1;'
+    )
+    for attempt in range(1, retries + 1):
+        try:
+            conn = pyodbc.connect(conn_str)
+            logger.info(f"Successfully connected to MDB database: {LOCAL_MDB_PATH}")
+            return conn
+        except pyodbc.Error as e:
+            logger.warning(f"MDB connection attempt {attempt}/{retries} failed: {e}")
+            if attempt < retries:
+                logger.info(f"Retrying in {delay}s...")
+                time.sleep(delay)
+    logger.error(f"Error connecting to MDB database after {retries} attempts.")
+    return None
 
 
 def get_sql_server_connection():
