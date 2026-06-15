@@ -126,30 +126,33 @@ SQL_SERVER_CONN_STRING = (
 _SRS_MDB_PATH = os.environ.get('SRS_MDB_PATH', r'M:\BR_DATA\SPACE\SRS_DB\srs_all.mdb')
 
 # Resolution classification rules (frequencies in MHz)
+# Each resolution has ALL applicable frequency bands combined — we do NOT
+# key by emi_rcp (R/E) because the database direction may differ from the
+# earth-station perspective used in the technical specification.
 _RES_RULES = {
     'RES156': {
         'classes': {'UF', 'UC'},
         'orbit': 'G',  # ntc_type = 'G' (GSO)
-        'freq_bands': {
-            'R': [(19700, 20200)],   # Downlink: 19.7-20.2 GHz
-            'E': [(29500, 30000)],   # Uplink:   29.5-30.0 GHz
-        },
+        'freq_bands': [
+            (19700, 20200),   # Downlink: 19.7-20.2 GHz
+            (29500, 30000),   # Uplink:   29.5-30.0 GHz
+        ],
     },
     'RES169': {
         'classes': {'UO', 'US', 'UU'},
         'orbit': 'G',
-        'freq_bands': {
-            'R': [(17700, 19700)],   # Downlink: 17.7-19.7 GHz
-            'E': [(27500, 29500)],   # Uplink:   27.5-29.5 GHz
-        },
+        'freq_bands': [
+            (17700, 19700),   # Downlink: 17.7-19.7 GHz
+            (27500, 29500),   # Uplink:   27.5-29.5 GHz
+        ],
     },
     'RES123': {
         'classes': {'UO', 'US'},
         'orbit': 'N',  # Non-GSO
-        'freq_bands': {
-            'R': [(17700, 18600), (18800, 19300), (19700, 20200)],
-            'E': [(27500, 29100), (29500, 30000)],
-        },
+        'freq_bands': [
+            (17700, 18600), (18800, 19300), (19700, 20200),  # Downlink
+            (27500, 29100), (29500, 30000),                   # Uplink
+        ],
     },
 }
 
@@ -162,16 +165,16 @@ def _freq_overlaps_any(freq_min, freq_max, bands):
     return False
 
 
-def _classify_single(e_srvcls, emi_rcp, freq_min, freq_max, ntc_type):
+def _classify_single(e_srvcls, freq_min, freq_max, ntc_type):
     """Classify a single group/beam record into applicable resolutions.
     
     Returns a dict like {'RES156': True, 'RES169': False, 'RES123': False}.
+    Frequency bands are checked without regard to emi_rcp direction.
     """
     result = {'RES156': False, 'RES169': False, 'RES123': False}
-    if e_srvcls is None or emi_rcp is None or freq_min is None or freq_max is None:
+    if e_srvcls is None or freq_min is None or freq_max is None:
         return result
     e_srvcls = str(e_srvcls).strip().upper()
-    emi_rcp = str(emi_rcp).strip().upper()
     if ntc_type:
         ntc_type = str(ntc_type).strip().upper()
 
@@ -180,8 +183,7 @@ def _classify_single(e_srvcls, emi_rcp, freq_min, freq_max, ntc_type):
             continue
         if ntc_type != rule['orbit']:
             continue
-        bands = rule['freq_bands'].get(emi_rcp)
-        if bands and _freq_overlaps_any(freq_min, freq_max, bands):
+        if _freq_overlaps_any(freq_min, freq_max, rule['freq_bands']):
             result[res_key] = True
     return result
 
@@ -247,7 +249,7 @@ def fetch_esim_resolutions():
             if ntc_id is None:
                 continue
             ntc_type = ntc_type_lookup.get(ntc_id)
-            cls_result = _classify_single(e_srvcls, row[2], row[3], row[4], ntc_type)
+            cls_result = _classify_single(e_srvcls, row[3], row[4], ntc_type)
             if ntc_id not in result:
                 result[ntc_id] = {'RES156': False, 'RES169': False, 'RES123': False}
             for res_key in ('RES156', 'RES169', 'RES123'):
