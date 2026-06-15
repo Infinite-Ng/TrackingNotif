@@ -8,16 +8,23 @@ from logging_config import logger
 # Paths to your source MS Access database files.
 TRACKING_MDB_PATH = r'M:\BR_DATA\SPACE\SNTRACK\sntrdat.mdb'
 mdw_file = r'M:\BR_DATA\SPACE\SNTRACK\sntrapp.mdw'
-# RES908_MDB_PATH = r"W:\codingSpace\ITU\ITU_TrackingNotif\dataset\res908.mdb"
 
 OUTPUT_FILE = os.path.join(os.path.dirname(__file__), '../frontend/data/data.json')
 
+# --- Credentials: prefer environment variables, fall back to defaults ---
+MDB_USER = os.environ.get('MDB_USER', 'spruser01')
+MDB_PASSWORD = os.environ.get('MDB_PASSWORD', 'spruser01')
+SQL_SERVER_USER = os.environ.get('SQL_SERVER_USER', 'sns_a')
+SQL_SERVER_PASSWORD = os.environ.get('SQL_SERVER_PASSWORD', 'sns_a_5678')
+SQL_SERVER_HOST = os.environ.get('SQL_SERVER_HOST', 'sydney.itu.int')
+SQL_SERVER_DB = os.environ.get('SQL_SERVER_DB', 'SpaceNetworkSystem')
+
 SQL_SERVER_CONN_STRING = (
     "DRIVER={SQL Server};"
-    "SERVER=sydney.itu.int;"
-    "DATABASE=SpaceNetworkSystem;"
-    "UID=sns_a;"
-    "PWD=sns_a_5678;"
+    f"SERVER={SQL_SERVER_HOST};"
+    f"DATABASE={SQL_SERVER_DB};"
+    f"UID={SQL_SERVER_USER};"
+    f"PWD={SQL_SERVER_PASSWORD};"
 )
 
 def get_mdb_connection(path, mdw_path, username, password):
@@ -69,43 +76,38 @@ def is_empty_sntrack_id(value):
 def fetch_and_export():
     print("Getting the live data from database...")
 
-    access_conn = get_mdb_connection(TRACKING_MDB_PATH, mdw_file, 'spruser01', 'spruser01')
+    access_conn = get_mdb_connection(TRACKING_MDB_PATH, mdw_file, MDB_USER, MDB_PASSWORD)
     if not access_conn:
         return
 
-    access_cursor = access_conn.cursor()
-    # get all the column name
-    # temp_query = "SELECT * FROM tblSpaceStnNotif LIMIT1"
-    # access_cursor.execute(temp_query)
-    # columns = [column[0] for column in access_cursor.description]
-    # print("All Column Names:", columns)
+    try:
+        access_cursor = access_conn.cursor()
+        access_query = """
+                SELECT [2d_date], BRREG, ADM, ntc_id, d_val_in, d_check_in, d_spr_out, d_complete, PUB, d_wmeeting, PUB2, PUB3, remarks, tex_remarks, CIRC, CIRC2, CIRC3, PHASE, tgt_ntc_id, subtoc, SUP, f_11_41, f_11_32A
+                FROM tblSpaceStnNotif
+                WHERE ntc_id <> 0
+                """
+        access_cursor.execute(access_query)
 
-    access_query = """
-            SELECT [2d_date], BRREG, ADM, ntc_id, d_val_in, d_check_in, d_spr_out, d_complete, PUB, d_wmeeting, PUB2, PUB3, remarks, tex_remarks, CIRC, CIRC2, CIRC3, PHASE, tgt_ntc_id, subtoc, SUP, f_11_41, f_11_32A
-            FROM tblSpaceStnNotif
-            WHERE ntc_id <> 0
-            """
-    access_cursor.execute(access_query)
+        columns = [column[0] for column in access_cursor.description]
 
-    columns = [column[0] for column in access_cursor.description]
+        access_data = []
+        access_ids_seen = set()
 
-    access_data = []
-    # record data in sntrack
-    access_ids_seen = set()
+        for row in access_cursor.fetchall():
+            row_dict = dict(zip(columns, row))
+            if row_dict.get('ntc_id'):
+                val_id = str(row_dict['ntc_id'])
+                row_dict['ntc_id'] = val_id
+                access_ids_seen.add(val_id)
+            access_data.append(row_dict)
 
-    for row in access_cursor.fetchall():
-        row_dict = dict(zip(columns, row))
-        if row_dict.get('ntc_id'):
-            val_id = str(row_dict['ntc_id'])
-            row_dict['ntc_id'] = val_id
-            access_ids_seen.add(val_id)  # 记录 ID
-        access_data.append(row_dict)
-
-    access_conn.close()
-    print(f"finished: {len(access_data)} records")
+        print(f"finished: {len(access_data)} records")
+    finally:
+        access_conn.close()
 
     print("Reading SQL Server res908 ...")
-    sql_conn = get_sql_server_connection()
+    sql_conn = None
     sql_lookup = {}
 
     sql_fields_lower = [
@@ -113,26 +115,30 @@ def fetch_and_export():
         'TypeOfSubmission', 'DocumentumReference', 'InternalReference', 'sntrack_id'
     ]
 
-    if sql_conn:
-        sql_cursor = sql_conn.cursor()
-        sql_query = """
-                SELECT SnsNtcId, SatName, long_nom, ntwk_org, DateOfReceive, TypeOfSubmission, DocumentumReference, sntrack_id, act_code, InternalReference 
-                FROM res908.Res908
-                WHERE SnsNtcId <> 0
-        """
-        sql_cursor.execute(sql_query)
+    try:
+        sql_conn = get_sql_server_connection()
+        if sql_conn:
+            sql_cursor = sql_conn.cursor()
+            sql_query = """
+                    SELECT SnsNtcId, SatName, long_nom, ntwk_org, DateOfReceive, TypeOfSubmission, DocumentumReference, sntrack_id, act_code, InternalReference 
+                    FROM res908.Res908
+                    WHERE SnsNtcId <> 0
+            """
+            sql_cursor.execute(sql_query)
 
-        sql_columns = [column[0] for column in sql_cursor.description]
+            sql_columns = [column[0] for column in sql_cursor.description]
 
-        for row in sql_cursor.fetchall():
-            row_dict = dict(zip(sql_columns, row))
-            key = str(row_dict['SnsNtcId'])
-            sql_lookup[key] = row_dict
+            for row in sql_cursor.fetchall():
+                row_dict = dict(zip(sql_columns, row))
+                key = str(row_dict['SnsNtcId'])
+                sql_lookup[key] = row_dict
 
-        sql_conn.close()
-        print(f"finished: {len(sql_lookup)} records")
-    else:
-        print("skipped SQL Server res908 ...")
+            print(f"finished: {len(sql_lookup)} records")
+        else:
+            print("skipped SQL Server res908 ...")
+    finally:
+        if sql_conn:
+            sql_conn.close()
 
     print("Merging Data (Full Outer Logic)...")
     final_data = []

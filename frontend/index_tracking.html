@@ -710,8 +710,10 @@
                 'PUB3': 22
             };
 
-            // Custom filtering function for dates (both top filter bar and column filters)
-            $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
+            // Custom filtering function (registered only once globally)
+            if (!window._ituSearchFnRegistered) {
+                window._ituSearchFnRegistered = true;
+                $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
                 // Top filter bar - DateOfReceive
                 var dateStart = $('#filter_date_start').val();
                 var dateEnd = $('#filter_date_end').val();
@@ -738,6 +740,7 @@
 
                 return true;
             });
+            } // end if (!window._ituSearchFnRegistered)
 
             // Initialize DataTable
             var tableInitialized = false;

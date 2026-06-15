@@ -2,6 +2,10 @@
 Generate a self-signed SSL certificate for the ITU Tracking API server.
 Run once: python generate_cert.py
 Produces cert.pem and key.pem in the same directory.
+
+WARNING: The private key (key.pem) is stored WITHOUT encryption.
+Ensure file permissions are restricted (e.g., chmod 600 on Linux,
+or restrict NTFS permissions to Administrators only on Windows).
 """
 import datetime
 import ipaddress
@@ -31,8 +35,8 @@ cert = (
     .issuer_name(issuer)
     .public_key(key.public_key())
     .serial_number(x509.random_serial_number())
-    .not_valid_before(datetime.datetime.utcnow())
-    .not_valid_after(datetime.datetime.utcnow() + datetime.timedelta(days=3650))
+    .not_valid_before(datetime.datetime.now(datetime.timezone.utc))
+    .not_valid_after(datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=3650))
     .add_extension(
         x509.SubjectAlternativeName([
             x509.IPAddress(ipaddress.IPv4Address("156.106.168.185")),

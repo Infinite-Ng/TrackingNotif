@@ -7,10 +7,11 @@ import os
 import shutil
 import time
 import pyodbc
-from flask import Flask, jsonify, send_from_directory
+from flask import Flask, jsonify, send_from_directory, request
 from flask_cors import CORS
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 import logging
+from functools import wraps
 
 # Configure logging
 logging.basicConfig(
@@ -19,8 +20,62 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# --- Simple in-memory rate limiter ---
+# Tracks request timestamps per client IP; allows max_requests per window_seconds.
+_rate_limit_store = {}  # {ip: [timestamp, ...]}
+_RATE_LIMIT_WINDOW = 60     # seconds
+_RATE_LIMIT_MAX = 30        # max requests per window per IP
+
+
+def rate_limit(f):
+    """Decorator: limit requests per IP within a rolling time window."""
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        client_ip = request.remote_addr or '127.0.0.1'
+        now = time.time()
+        timestamps = _rate_limit_store.get(client_ip, [])
+        # Purge expired entries
+        timestamps = [t for t in timestamps if now - t < _RATE_LIMIT_WINDOW]
+        if len(timestamps) >= _RATE_LIMIT_MAX:
+            logger.warning(f"Rate limit exceeded for {client_ip}")
+            return jsonify({
+                'success': False,
+                'error': 'Too many requests. Please try again later.'
+            }), 429
+        timestamps.append(now)
+        _rate_limit_store[client_ip] = timestamps
+        return f(*args, **kwargs)
+    return wrapper
+
+
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+
+# --- CORS Configuration ---
+# This is an internal ITU tool; frontends may be served from Flask itself
+# (same-origin, no CORS needed) or from the IIS intweb server (cross-origin).
+_ALLOWED_ORIGINS = [
+    # Flask self-served origins (same-origin, included for completeness)
+    'https://156.106.168.185:5001',
+    'http://156.106.168.185:5001',
+    'https://localhost:5001',
+    'http://localhost:5001',
+    'https://127.0.0.1:5001',
+    'http://127.0.0.1:5001',
+    # IIS intweb frontend (cross-origin)
+    'https://intweb.itu.int',
+    'http://intweb.itu.int',
+    # Allow file:// origins (some browsers send Origin: null)
+    'null',
+]
+# Also allow additional origins via environment variable (comma-separated)
+_extra_origins = os.environ.get('FRONTEND_ORIGIN')
+if _extra_origins:
+    for origin in _extra_origins.split(','):
+        origin = origin.strip()
+        if origin and origin not in _ALLOWED_ORIGINS:
+            _ALLOWED_ORIGINS.append(origin)
+
+CORS(app, origins=_ALLOWED_ORIGINS, supports_credentials=False)
 
 # --- Frontend directory ---
 FRONTEND_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'frontend')
@@ -30,8 +85,8 @@ FRONTEND_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'f
 # (mapped drive letters like M: are not visible in elevated sessions)
 _NET_MDB = r'\\blue\dfs\br\BR_DATA\SPACE\SNTRACK\sntrdat.mdb'
 _NET_MDW = r'\\blue\dfs\br\BR_DATA\SPACE\SNTRACK\sntrapp.mdw'
-MDB_USERNAME = 'spruser01'
-MDB_PASSWORD = 'spruser01'
+MDB_USERNAME = os.environ.get('MDB_USER', 'spruser01')
+MDB_PASSWORD = os.environ.get('MDB_PASSWORD', 'spruser01')
 
 # Local data directory – files here are used for all connections.
 # Manually pre-seeded; auto-refreshed on every /api/data request.
@@ -61,10 +116,10 @@ _sync_local_files()
 
 SQL_SERVER_CONN_STRING = (
     "DRIVER={SQL Server};"
-    "SERVER=sydney.itu.int;"
-    "DATABASE=SpaceNetworkSystem;"
-    "UID=sns_a;"
-    "PWD=sns_a_5678;"
+    f"SERVER={os.environ.get('SQL_SERVER_HOST', 'sydney.itu.int')};"
+    f"DATABASE={os.environ.get('SQL_SERVER_DB', 'SpaceNetworkSystem')};"
+    f"UID={os.environ.get('SQL_SERVER_USER', 'sns_a')};"
+    f"PWD={os.environ.get('SQL_SERVER_PASSWORD', 'sns_a_5678')};"
 )
 
 def get_mdb_connection(retries=3, delay=5):
@@ -142,11 +197,15 @@ def fetch_data():
     logger.info("Starting data fetch...")
     
     # Fetch from MS Access (sntrack)
-    access_conn = get_mdb_connection()
-    if not access_conn:
-        return None, "Failed to connect to MS Access database"
+    access_conn = None
+    sql_conn = None
+    status_conn = None
 
     try:
+        access_conn = get_mdb_connection()
+        if not access_conn:
+            return None, "Failed to connect to MS Access database"
+
         access_cursor = access_conn.cursor()
         access_query = """
             SELECT [2d_date], BRREG, ADM, ntc_id, d_val_in, d_check_in, 
@@ -170,16 +229,15 @@ def fetch_data():
                 access_ids_seen.add(val_id)
             access_data.append(row_dict)
 
-        access_conn.close()
         logger.info(f"Fetched {len(access_data)} records from MS Access")
     except Exception as e:
         logger.error(f"Error fetching from MS Access: {e}")
+        return None, f"Error fetching from MS Access: {e}"
+    finally:
         if access_conn:
             access_conn.close()
-        return None, f"Error fetching from MS Access: {e}"
 
     # Fetch from SQL Server (res908)
-    sql_conn = get_sql_server_connection()
     sql_lookup = {}
 
     sql_fields_lower = [
@@ -188,8 +246,9 @@ def fetch_data():
         'SubmissionId'
     ]
 
-    if sql_conn:
-        try:
+    try:
+        sql_conn = get_sql_server_connection()
+        if sql_conn:
             sql_cursor = sql_conn.cursor()
             sql_query = """
                 SELECT SnsNtcId, SatName, long_nom, ntwk_org, DateOfReceive, 
@@ -206,22 +265,21 @@ def fetch_data():
                 key = str(row_dict['SnsNtcId'])
                 sql_lookup[key] = row_dict
 
-            sql_conn.close()
             logger.info(f"Fetched {len(sql_lookup)} records from SQL Server")
-        except Exception as e:
-            logger.error(f"Error fetching from SQL Server: {e}")
-            if sql_conn:
-                sql_conn.close()
-    else:
-        logger.warning("Skipped SQL Server res908 (connection failed)")
+        else:
+            logger.warning("Skipped SQL Server res908 (connection failed)")
+    except Exception as e:
+        logger.error(f"Error fetching from SQL Server: {e}")
+    finally:
+        if sql_conn:
+            sql_conn.close()
 
     # Fetch status from dbo.Submissions table via SubmissionId
     status_lookup = {}
-    status_conn = get_sql_server_connection()
-    if status_conn:
-        try:
+    try:
+        status_conn = get_sql_server_connection()
+        if status_conn:
             status_cursor = status_conn.cursor()
-            # Query to get status for each SubmissionId
             status_query = """
                 SELECT s.SubmissionId, ss.st_desc
                 FROM dbo.Submissions s
@@ -236,14 +294,14 @@ def fetch_data():
                 if submission_id:
                     status_lookup[submission_id] = st_desc
             
-            status_conn.close()
             logger.info(f"Fetched {len(status_lookup)} status records from Submissions")
-        except Exception as e:
-            logger.error(f"Error fetching status: {e}")
-            if status_conn:
-                status_conn.close()
-    else:
-        logger.warning("Skipped status lookup (connection failed)")
+        else:
+            logger.warning("Skipped status lookup (connection failed)")
+    except Exception as e:
+        logger.error(f"Error fetching status: {e}")
+    finally:
+        if status_conn:
+            status_conn.close()
 
     # Merge data (Full Outer Join logic)
     logger.info("Merging data...")
@@ -311,6 +369,7 @@ def fetch_data():
 
 
 @app.route('/api/data', methods=['GET'])
+@rate_limit
 def get_data():
     """
     API endpoint to fetch all tracking data.
@@ -326,7 +385,7 @@ def get_data():
             }), 500
 
         # Save a local cache for offline fallback
-        now_iso = datetime.now().isoformat()
+        now_iso = datetime.now(timezone.utc).isoformat()
         cache_payload = {'generated_at': now_iso, 'data': data}
 
         # Write to multiple locations so both Flask-served and IIS-served frontends
@@ -366,7 +425,7 @@ def health_check():
     """Health check endpoint."""
     return jsonify({
         'status': 'healthy',
-        'timestamp': datetime.now().isoformat()
+        'timestamp': datetime.now(timezone.utc).isoformat()
     })
 
 
