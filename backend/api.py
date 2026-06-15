@@ -122,6 +122,147 @@ SQL_SERVER_CONN_STRING = (
     f"PWD={os.environ.get('SQL_SERVER_PASSWORD', 'sns_a_5678')};"
 )
 
+# --- SRS Database (ESIM Resolution Classification) ---
+_SRS_MDB_PATH = os.environ.get('SRS_MDB_PATH', r'M:\BR_DATA\SPACE\SRS_DB\srs_all.mdb')
+
+# Resolution classification rules (frequencies in MHz)
+_RES_RULES = {
+    'RES156': {
+        'classes': {'UF', 'UC'},
+        'orbit': 'G',  # ntc_type = 'G' (GSO)
+        'freq_bands': {
+            'R': [(19700, 20200)],   # Downlink: 19.7-20.2 GHz
+            'E': [(29500, 30000)],   # Uplink:   29.5-30.0 GHz
+        },
+    },
+    'RES169': {
+        'classes': {'UO', 'US', 'UU'},
+        'orbit': 'G',
+        'freq_bands': {
+            'R': [(17700, 19700)],   # Downlink: 17.7-19.7 GHz
+            'E': [(27500, 29500)],   # Uplink:   27.5-29.5 GHz
+        },
+    },
+    'RES123': {
+        'classes': {'UO', 'US'},
+        'orbit': 'N',  # Non-GSO
+        'freq_bands': {
+            'R': [(17700, 18600), (18800, 19300), (19700, 20200)],
+            'E': [(27500, 29100), (29500, 30000)],
+        },
+    },
+}
+
+
+def _freq_overlaps_any(freq_min, freq_max, bands):
+    """Return True if [freq_min, freq_max] overlaps with any of the given frequency bands."""
+    for (lo, hi) in bands:
+        if freq_min <= hi and freq_max >= lo:
+            return True
+    return False
+
+
+def _classify_single(e_srvcls, emi_rcp, freq_min, freq_max, ntc_type):
+    """Classify a single group/beam record into applicable resolutions.
+    
+    Returns a dict like {'RES156': True, 'RES169': False, 'RES123': False}.
+    """
+    result = {'RES156': False, 'RES169': False, 'RES123': False}
+    if e_srvcls is None or emi_rcp is None or freq_min is None or freq_max is None:
+        return result
+    e_srvcls = str(e_srvcls).strip().upper()
+    emi_rcp = str(emi_rcp).strip().upper()
+    if ntc_type:
+        ntc_type = str(ntc_type).strip().upper()
+
+    for res_key, rule in _RES_RULES.items():
+        if e_srvcls not in rule['classes']:
+            continue
+        if ntc_type != rule['orbit']:
+            continue
+        bands = rule['freq_bands'].get(emi_rcp)
+        if bands and _freq_overlaps_any(freq_min, freq_max, bands):
+            result[res_key] = True
+    return result
+
+
+def fetch_esim_resolutions():
+    """Query SRS database and classify each ntc_id for RES156/RES169/RES123.
+
+    Uses a staged query approach to avoid slow multi-table JOINs on large Access tables.
+    Returns a dict: {ntc_id_str: {'RES156': bool, 'RES169': bool, 'RES123': bool}}
+    """
+    result = {}
+    srs_conn = None
+    try:
+        if not os.path.exists(_SRS_MDB_PATH):
+            logger.warning(f"SRS database not found at {_SRS_MDB_PATH}; skipping ESIM classification.")
+            return result
+        
+        conn_str = (
+            r'DRIVER={Microsoft Access Driver (*.mdb, *.accdb)};'
+            f'DBQ={_SRS_MDB_PATH};'
+            r'ReadOnly=1;'
+        )
+        srs_conn = pyodbc.connect(conn_str)
+        logger.info(f"Connected to SRS database: {_SRS_MDB_PATH}")
+
+        # Step 1: Get ESIM groups with their class, frequency, and ntc_id
+        cursor = srs_conn.cursor()
+        cursor.execute("""
+            SELECT e.stn_cls, g.ntc_id, g.emi_rcp, g.freq_min, g.freq_max
+            FROM e_srvcls e
+                INNER JOIN grp g ON e.grp_id = g.grp_id
+            WHERE e.stn_cls IN ('UF', 'UC', 'UO', 'US', 'UU')
+        """)
+        group_rows = cursor.fetchall()
+        logger.info(f"SRS Step 1: {len(group_rows)} group rows with ESIM classes")
+
+        if not group_rows:
+            return result
+
+        # Step 2: Get ntc_type from notice table for the ntc_ids we care about
+        ntc_ids = set(str(row[1]) for row in group_rows if row[1] is not None)
+        ntc_type_lookup = {}
+        if ntc_ids:
+            # Build IN clause in batches of 500 to avoid query length limits
+            ntc_ids_list = list(ntc_ids)
+            batch_size = 500
+            for i in range(0, len(ntc_ids_list), batch_size):
+                batch = ntc_ids_list[i:i+batch_size]
+                placeholders = ','.join(batch)
+                cursor.execute(f"""
+                    SELECT ntc_id, ntc_type
+                    FROM [notice]
+                    WHERE ntc_id IN ({placeholders})
+                """)
+                for row in cursor.fetchall():
+                    ntc_type_lookup[str(row[0])] = row[1]
+        logger.info(f"SRS Step 2: {len(ntc_type_lookup)} ntc_ids with ntc_type")
+
+        # Step 3: Classify each group row and aggregate by ntc_id
+        for row in group_rows:
+            e_srvcls = row[0]
+            ntc_id = str(row[1]) if row[1] is not None else None
+            if ntc_id is None:
+                continue
+            ntc_type = ntc_type_lookup.get(ntc_id)
+            cls_result = _classify_single(e_srvcls, row[2], row[3], row[4], ntc_type)
+            if ntc_id not in result:
+                result[ntc_id] = {'RES156': False, 'RES169': False, 'RES123': False}
+            for res_key in ('RES156', 'RES169', 'RES123'):
+                if cls_result[res_key]:
+                    result[ntc_id][res_key] = True
+
+        logger.info(f"ESIM classification complete: {len(result)} ntc_ids with ESIM classes")
+    except Exception as e:
+        logger.error(f"Error fetching ESIM resolutions: {e}")
+    finally:
+        if srs_conn:
+            srs_conn.close()
+    return result
+
+
 def get_mdb_connection(retries=3, delay=5):
     """Connects to the local copy of the MDB database.
     Syncs local files from the network first; retries on transient errors."""
@@ -363,6 +504,15 @@ def fetch_data():
             new_row['Status'] = status_lookup.get(submission_id, '')
 
             final_data.append(convert_to_serializable(new_row))
+
+    # --- Merge ESIM Resolution classification ---
+    esim_resolutions = fetch_esim_resolutions()
+    for row in final_data:
+        ntc_id = str(row.get('ntc_id', ''))
+        res_info = esim_resolutions.get(ntc_id, {})
+        row['RES156'] = res_info.get('RES156', False)
+        row['RES169'] = res_info.get('RES169', False)
+        row['RES123'] = res_info.get('RES123', False)
 
     logger.info(f"Total merged records: {len(final_data)}")
     return final_data, None

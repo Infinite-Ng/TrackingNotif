@@ -768,12 +768,16 @@
                             <th>SUP</th>
                             <th>remarks</th>
                             <th>InternalReference</th>
+                            <th>Res156</th>
+                            <th>Res169</th>
+                            <th>Res123</th>
                         </tr>
                         <tr class="column-filter-row">
                             <th></th><th></th><th></th><th></th><th></th><th></th><th></th>
                             <th></th><th></th><th></th><th></th><th></th><th></th><th></th>
                             <th></th><th></th><th></th><th></th><th></th><th></th><th></th>
                             <th></th><th></th><th></th><th></th><th></th><th></th>
+                            <th></th><th></th><th></th>
                         </tr>
                     </thead>
                     <tbody></tbody>
@@ -914,7 +918,10 @@
             }},
             { data: 'SUP', title: 'SUP' },
             { data: 'remarks', title: 'remarks' },
-            { data: 'InternalReference', title: 'InternalReference' }
+            { data: 'InternalReference', title: 'InternalReference' },
+            { data: 'RES156', title: 'Res156', render: function(data) { return data ? 'Yes' : ''; }},
+            { data: 'RES169', title: 'Res169', render: function(data) { return data ? 'Yes' : ''; }},
+            { data: 'RES123', title: 'Res123', render: function(data) { return data ? 'Yes' : ''; }}
         ];
 
         // Track column visibility (initialized inside $(document).ready via initColumnVisibility)
@@ -968,10 +975,10 @@
             var allData = [];
             
             // Column config version - increment when columns change
-            const COLUMN_CONFIG_VERSION = 3; // v3: default 14 columns selected
+            const COLUMN_CONFIG_VERSION = 4; // v4: added Res156/169/123 columns
 
             // Default column visibility: SNTrackID, ADM, SatName, long_nom, BRReg, DateOfReceive,
-            // Notice ID, act_code, tgt_ntc_id, TypeOfSubmission, Status, 11.32A, 11.41, subtoc
+            // Notice ID, act_code, tgt_ntc_id, TypeOfSubmission, Status, 11.32A, 11.41, subtoc, Res156/169/123
             const DEFAULT_COLUMN_VISIBILITY = [
                 true,  // 0  SNTrack ID
                 true,  // 1  ADM
@@ -999,7 +1006,10 @@
                 false, // 23 pub3
                 false, // 24 SUP
                 false, // 25 remarks
-                false  // 26 InternalReference
+                false, // 26 InternalReference
+                true,  // 27 Res156
+                true,  // 28 Res169
+                true   // 29 Res123
             ];
 
             // Initialize column visibility - check localStorage first
@@ -1372,7 +1382,10 @@
                     'f_11_41': ['', 'True', 'False'],
                     'CIRC': ['', 'HasValue', 'Empty'],
                     'CIRC2': ['', 'HasValue', 'Empty'],
-                    'CIRC3': ['', 'HasValue', 'Empty']
+                    'CIRC3': ['', 'HasValue', 'Empty'],
+                    'RES156': ['', 'Yes', '-'],
+                    'RES169': ['', 'Yes', '-'],
+                    'RES123': ['', 'Yes', '-']
                 };
 
                 api.columns().every(function(colIdx) {
