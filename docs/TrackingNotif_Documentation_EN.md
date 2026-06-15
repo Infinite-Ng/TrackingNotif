@@ -219,25 +219,46 @@ If the server IP changes, update the following:
 
 ### 7.6 Data Source Configuration
 
-Database connection settings are in `TrackingNotif/backend/api.py`:
+Database connection settings are in `TrackingNotif/backend/api.py`. **Credentials can now be set via environment variables** (recommended for security), with hardcoded fallback values:
 
-```python
-# MS Access
-TRACKING_MDB_PATH = r'M:\BR_DATA\SPACE\SNTRACK\sntrdat.mdb'
-MDW_FILE          = r'M:\BR_DATA\SPACE\SNTRACK\sntrapp.mdw'
-MDB_USERNAME      = 'spruser01'
-MDB_PASSWORD      = 'spruser01'
-
-# SQL Server
-SQL_SERVER   = 'sydney.itu.int'
-SQL_DATABASE = 'SpaceNetworkSystem'
-SQL_USERNAME = 'sns_a'
-SQL_PASSWORD = 'sns_a_5678'
-```
+| Environment Variable | Description | Fallback Default |
+|----------------------|-------------|------------------|
+| `MDB_USER` | MS Access username | `spruser01` |
+| `MDB_PASSWORD` | MS Access password | `spruser01` |
+| `SQL_SERVER_USER` | SQL Server username | `sns_a` |
+| `SQL_SERVER_PASSWORD` | SQL Server password | `sns_a_5678` |
+| `SQL_SERVER_HOST` | SQL Server hostname | `sydney.itu.int` |
+| `SQL_SERVER_DB` | SQL Server database name | `SpaceNetworkSystem` |
 
 All MDB connections use `ReadOnly=1` so the database can be opened simultaneously by multiple users without locking.
 
-### 7.7 Installing Dependencies
+### 7.7 CORS Configuration
+
+The backend restricts CORS (Cross-Origin Resource Sharing) to a known set of origins for security. When the frontend is served from a different origin (e.g., IIS at `https://intweb.itu.int`), the browser sends a cross-origin request that must be allowed.
+
+**Allowed origins (built-in):**
+- `https://156.106.168.185:5001` / `http://156.106.168.185:5001`
+- `https://localhost:5001` / `http://localhost:5001`
+- `https://127.0.0.1:5001` / `http://127.0.0.1:5001`
+- `https://intweb.itu.int` / `http://intweb.itu.int`
+- `null` (for `file://` access)
+
+**Adding additional origins:** Set the `FRONTEND_ORIGIN` environment variable with comma-separated URLs:
+```bat
+set FRONTEND_ORIGIN=https://example.com,https://another.example.com
+```
+
+If the frontend shows "Offline – using backup data" on other machines despite the backend running, this is likely a CORS issue — verify the accessing origin is in the allowed list.
+
+### 7.8 Security Configuration
+
+**Rate limiting:** The `/api/data` endpoint is rate-limited to **30 requests per 60 seconds** per client IP to prevent abuse.
+
+**SSL private key:** The file `backend/key.pem` is stored without encryption. On Windows, restrict NTFS permissions to Administrators only. On Linux, use `chmod 600 key.pem`.
+
+**Database credentials:** See Section 7.6 — use environment variables to avoid storing passwords in source code.
+
+### 7.9 Installing Dependencies
 
 ```bat
 cd TrackingNotif\backend
@@ -248,16 +269,18 @@ Key dependencies: `flask`, `pyodbc`, `cryptography`
 
 The MS Access driver must also be installed: **Microsoft Access Database Engine 2016 Redistributable** (64-bit).
 
-### 7.8 Troubleshooting
+### 7.10 Troubleshooting
 
 | Symptom | Likely cause | Fix |
 |---------|-------------|-----|
 | "Connection failed" banner in browser | Backend not running | Start `api.py` (Section 7.1) |
 | Certificate warning / blocked connection | Certificate not trusted | Follow Section 3 |
+| Table shows "Offline" with orange banner on other machines | CORS origin not allowed | Verify origin in allowed list (Section 7.7) or set `FRONTEND_ORIGIN` env var |
 | Table shows stale data with orange banner | Backend unreachable; cached data displayed | Check backend status |
 | Port 5001 already in use | Old process still running | Kill the old process (Section 7.2) |
 | No data after Refresh | Database path `M:\` not accessible | Verify drive mapping on the server machine |
 | Export button produces empty file | All rows filtered out | Reset filters first |
+| 429 Too Many Requests error | Rate limit exceeded | Wait and retry (limit: 30 req/min) |
 
 ---
 
@@ -265,8 +288,7 @@ The MS Access driver must also be installed: **Microsoft Access Database Engine 
 
 - **Git remote:** `https://github.com/Infinite-Ng/TrackingNotif.git`
 - **Main branch:** `main`
-- Two local copies: `TrackingNotif/` (primary) and `TrackingNotif_edited/`
 
 ---
 
-*Last updated: 2025*
+*Last updated: June 2026*

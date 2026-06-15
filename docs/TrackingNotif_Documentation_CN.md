@@ -218,25 +218,46 @@ python generate_cert.py
 
 ### 7.6 数据源配置
 
-数据库连接参数位于 `TrackingNotif/backend/api.py`：
+数据库连接参数位于 `TrackingNotif/backend/api.py`。**现在支持通过环境变量设置凭据**（推荐，更安全），未设置时使用代码中的默认值：
 
-```python
-# MS Access
-TRACKING_MDB_PATH = r'M:\BR_DATA\SPACE\SNTRACK\sntrdat.mdb'
-MDW_FILE          = r'M:\BR_DATA\SPACE\SNTRACK\sntrapp.mdw'
-MDB_USERNAME      = 'spruser01'
-MDB_PASSWORD      = 'spruser01'
-
-# SQL Server
-SQL_SERVER   = 'sydney.itu.int'
-SQL_DATABASE = 'SpaceNetworkSystem'
-SQL_USERNAME = 'sns_a'
-SQL_PASSWORD = 'sns_a_5678'
-```
+| 环境变量 | 说明 | 默认值 |
+|----------|------|--------|
+| `MDB_USER` | MS Access 用户名 | `spruser01` |
+| `MDB_PASSWORD` | MS Access 密码 | `spruser01` |
+| `SQL_SERVER_USER` | SQL Server 用户名 | `sns_a` |
+| `SQL_SERVER_PASSWORD` | SQL Server 密码 | `sns_a_5678` |
+| `SQL_SERVER_HOST` | SQL Server 主机名 | `sydney.itu.int` |
+| `SQL_SERVER_DB` | SQL Server 数据库名 | `SpaceNetworkSystem` |
 
 所有 MDB 连接均使用 `ReadOnly=1`，支持多用户同时访问数据库而不产生锁定。
 
-### 7.7 安装依赖
+### 7.7 CORS（跨域资源共享）配置
+
+后端限制 CORS 为已知来源列表以提高安全性。当前端从不同来源访问时（如通过 IIS `https://intweb.itu.int`），浏览器会发送跨域请求，必须被后端允许。
+
+**内置允许的来源：**
+- `https://156.106.168.185:5001` / `http://156.106.168.185:5001`
+- `https://localhost:5001` / `http://localhost:5001`
+- `https://127.0.0.1:5001` / `http://127.0.0.1:5001`
+- `https://intweb.itu.int` / `http://intweb.itu.int`
+- `null`（用于 `file://` 协议访问）
+
+**添加额外来源：** 设置 `FRONTEND_ORIGIN` 环境变量（逗号分隔多个 URL）：
+```bat
+set FRONTEND_ORIGIN=https://example.com,https://another.example.com
+```
+
+如果其他电脑访问时显示 "Offline – using backup data" 但后端实际正常运行，通常是 CORS 问题——请检查访问来源是否在允许列表中。
+
+### 7.8 安全配置说明
+
+**请求频率限制：** `/api/data` 接口限制为每个客户端 IP 每 60 秒最多 **30 次请求**，防止滥用。
+
+**SSL 私钥：** `backend/key.pem` 文件未加密存储。Windows 上请将 NTFS 权限限制为仅管理员可读，Linux 上使用 `chmod 600 key.pem`。
+
+**数据库凭据：** 参见 7.6 节——推荐使用环境变量，避免密码明文出现在源码中。
+
+### 7.9 安装依赖
 
 ```bat
 cd TrackingNotif\backend
@@ -247,16 +268,18 @@ pip install -r requirements.txt
 
 此外还需安装 **Microsoft Access 数据库引擎 2016 可再发行组件**（64位版本）。
 
-### 7.8 常见问题排查
+### 7.10 常见问题排查
 
 | 现象 | 可能原因 | 解决方法 |
-|------|---------|---------|
+|------|---------|------------|
 | 页面显示"Connection failed"横幅 | 后端未运行 | 启动 `api.py`（参见 7.1）|
 | 浏览器提示证书警告或阻止连接 | 证书未被信任 | 参见第 3 节操作步骤 |
+| 其他电脑显示"Offline"橙色横幅 | CORS 来源未允许 | 确认访问来源在允许列表中（参见 7.7）或设置 `FRONTEND_ORIGIN` 环境变量 |
 | 表格显示旧数据并有橙色横幅 | 后端不可用，显示缓存数据 | 检查后端运行状态 |
 | 端口 5001 已被占用 | 旧进程仍在后台运行 | 结束旧进程（参见 7.2）|
 | 刷新后无数据 | 服务器上 `M:\` 盘未挂载 | 检查服务器上的网络驱动器映射 |
 | 导出文件为空 | 当前筛选结果为零行 | 先重置筛选条件再导出 |
+| 出现 429 Too Many Requests 错误 | 超出请求频率限制 | 稍后重试（限制: 30次/分钟）|
 
 ---
 
@@ -264,8 +287,7 @@ pip install -r requirements.txt
 
 - **Git 远程仓库：** `https://github.com/Infinite-Ng/TrackingNotif.git`
 - **主分支：** `main`
-- 本地两份代码：`TrackingNotif/`（主版本）和 `TrackingNotif_edited/`
 
 ---
 
-*最后更新：2025年*
+*最后更新：2026年6月*
