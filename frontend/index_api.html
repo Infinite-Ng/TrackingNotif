@@ -1389,6 +1389,7 @@
                 };
 
                 api.columns().every(function(colIdx) {
+                    try {
                     var column = this;
                     // Safety: skip if filter cells were cleared or mismatched
                     $filterCells = $('#ituTable thead .column-filter-row th');
@@ -1792,6 +1793,9 @@
                                 column.search(val, false, true).draw();
                             }
                         });
+                    }
+                    } catch(e) {
+                        console.warn('Filter build failed for col', colIdx, e);
                     }
                 });
             }
