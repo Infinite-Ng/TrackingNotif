@@ -259,8 +259,25 @@ def fetch_esim_resolutions():
                     result[ntc_id][res_key] = True
 
         logger.info(f"ESIM classification complete: {len(result)} ntc_ids with ESIM classes")
+        # DEBUG: Write classification summary to a file for diagnosis
+        try:
+            res156 = sum(1 for v in result.values() if v['RES156'])
+            res169 = sum(1 for v in result.values() if v['RES169'])
+            res123 = sum(1 for v in result.values() if v['RES123'])
+            debug_msg = (f"ESIM OK: {len(result)} ids, RES156={res156}, RES169={res169}, RES123={res123}\n")
+            with open(os.path.join(os.path.dirname(__file__), 'esim_debug.log'), 'a', encoding='utf-8') as _f:
+                from datetime import datetime as _dt
+                _f.write(f"{_dt.now()}: {debug_msg}")
+        except Exception:
+            pass
     except Exception as e:
         logger.error(f"Error fetching ESIM resolutions: {e}")
+        try:
+            with open(os.path.join(os.path.dirname(__file__), 'esim_debug.log'), 'a', encoding='utf-8') as _f:
+                from datetime import datetime as _dt
+                _f.write(f"{_dt.now()}: ESIM ERROR: {e}\n")
+        except Exception:
+            pass
     finally:
         if srs_conn:
             srs_conn.close()
@@ -511,14 +528,17 @@ def fetch_data():
 
     # --- Merge ESIM Resolution classification ---
     esim_resolutions = fetch_esim_resolutions()
+    esim_matched = 0
     for row in final_data:
         ntc_id = str(row.get('ntc_id', ''))
         res_info = esim_resolutions.get(ntc_id, {})
         row['RES156'] = res_info.get('RES156', False)
         row['RES169'] = res_info.get('RES169', False)
         row['RES123'] = res_info.get('RES123', False)
+        if res_info:
+            esim_matched += 1
 
-    logger.info(f"Total merged records: {len(final_data)}")
+    logger.info(f"ESIM merge: {esim_matched}/{len(final_data)} records matched with SRS data")
     return final_data, None
 
 
