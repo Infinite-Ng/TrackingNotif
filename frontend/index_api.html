@@ -1598,7 +1598,7 @@
                             } else if (val === 'HasValue') {
                                 searchVal = '^.+$';
                             }
-                            column.search(searchVal, true, false).draw();
+                            api.column(colIdx).search(searchVal, true, false).draw();
                         });
 
                     } else if (dataSrc === 'TypeOfSubmission') {
@@ -1782,7 +1782,7 @@
                             } else if (val) {
                                 searchVal = '^' + $.fn.dataTable.util.escapeRegex(val) + '$';
                             }
-                            column.search(searchVal, true, false).draw();
+                            api.column(colIdx).search(searchVal, true, false).draw();
                         });
 
                     } else {
@@ -1790,8 +1790,8 @@
                         $th.append($input);
                         $input.on('keyup change', function() {
                             var val = $(this).val();
-                            if (column.search() !== val) {
-                                column.search(val, false, true).draw();
+                            if (api.column(colIdx).search() !== val) {
+                                api.column(colIdx).search(val, false, true).draw();
                             }
                         });
                     }
