@@ -1388,21 +1388,22 @@
                     'RES123': ['', 'Yes', 'Empty']
                 };
 
-                api.columns().every(function(colIdx) {
+                // Use simple for-loop over columnConfig instead of api.columns().every()
+                // to avoid DataTables column-indexing issues when columns are hidden.
+                for (var colIdx = 0; colIdx < columnConfig.length; colIdx++) {
                     try {
-                    var column = this;
-                    // Safety: skip if filter cells were cleared or mismatched
-                    $filterCells = $('#ituTable thead .column-filter-row th');
-                    if (colIdx >= $filterCells.length) return;
                     var dataSrc = columnConfig[colIdx].data;
+                    $filterCells = $('#ituTable thead .column-filter-row th');
+                    if (colIdx >= $filterCells.length) continue;
                     var $th = $($filterCells[colIdx]);
                     $th.empty();
                     
-                    if (column.visible()) {
+                    var colVisible = columnVisibility[colIdx];
+                    if (colVisible) {
                         $th.show();
                     } else {
                         $th.hide();
-                        return;
+                        continue;
                     }
 
                     if (dateColumns.includes(dataSrc)) {
@@ -1797,7 +1798,7 @@
                     } catch(e) {
                         console.warn('Filter build failed for col', colIdx, e);
                     }
-                });
+                }  // end for loop over columnConfig
             }
             
             // Sync filter row visibility with column visibility
