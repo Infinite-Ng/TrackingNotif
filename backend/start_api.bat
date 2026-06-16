@@ -41,5 +41,15 @@ for /f "tokens=5" %%P in ('netstat -ano ^| findstr /R "\<5001\>" ^| findstr LIST
 echo Port 5001 is now free. Starting API server...
 echo.
 
+:: ── Map M: drive for SRS database linked tables (not visible in admin session) ──
+echo Mapping M: drive for linked database access...
+net use M: \\blue\dfs\br /persistent:no >nul 2>&1
+if errorlevel 1 (
+    echo   Warning: Could not map M: drive. SRS ESIM classification may fail.
+) else (
+    echo   M: drive mapped successfully.
+)
+echo.
+
 python api.py
 pause
