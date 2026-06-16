@@ -123,7 +123,9 @@ SQL_SERVER_CONN_STRING = (
 )
 
 # --- SRS Database (ESIM Resolution Classification) ---
-_SRS_MDB_PATH = os.environ.get('SRS_MDB_PATH', r'M:\BR_DATA\SPACE\SRS_DB\srs_all.mdb')
+# Use UNC path so the admin-elevated process can reach it
+# (mapped drive M: is NOT visible in elevated sessions)
+_SRS_MDB_PATH = os.environ.get('SRS_MDB_PATH', r'\\blue\dfs\br\BR_DATA\SPACE\SRS_DB\srs_all.mdb')
 
 # Resolution classification rules (frequencies in MHz)
 # Each resolution has ALL applicable frequency bands combined — we do NOT
