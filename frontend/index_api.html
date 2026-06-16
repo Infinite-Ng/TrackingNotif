@@ -1383,13 +1383,16 @@
                     'CIRC': ['', 'HasValue', 'Empty'],
                     'CIRC2': ['', 'HasValue', 'Empty'],
                     'CIRC3': ['', 'HasValue', 'Empty'],
-                    'RES156': ['', 'Yes', '-'],
-                    'RES169': ['', 'Yes', '-'],
-                    'RES123': ['', 'Yes', '-']
+                    'RES156': ['', 'Yes', 'Empty'],
+                    'RES169': ['', 'Yes', 'Empty'],
+                    'RES123': ['', 'Yes', 'Empty']
                 };
 
                 api.columns().every(function(colIdx) {
                     var column = this;
+                    // Safety: skip if filter cells were cleared or mismatched
+                    $filterCells = $('#ituTable thead .column-filter-row th');
+                    if (colIdx >= $filterCells.length) return;
                     var dataSrc = columnConfig[colIdx].data;
                     var $th = $($filterCells[colIdx]);
                     $th.empty();
