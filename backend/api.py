@@ -551,6 +551,7 @@ def fetch_data():
     # --- Merge ESIM Resolution classification ---
     esim_resolutions = fetch_esim_resolutions()
     esim_matched = 0
+    res156_count = res169_count = res123_count = 0
     for row in final_data:
         ntc_id = str(row.get('ntc_id', ''))
         res_info = esim_resolutions.get(ntc_id, {})
@@ -559,8 +560,15 @@ def fetch_data():
         row['RES123'] = res_info.get('RES123', False)
         if res_info:
             esim_matched += 1
+        if row['RES156']:
+            res156_count += 1
+        if row['RES169']:
+            res169_count += 1
+        if row['RES123']:
+            res123_count += 1
 
-    logger.info(f"ESIM merge: {esim_matched}/{len(final_data)} records matched with SRS data")
+    logger.info(f"ESIM merge: {esim_matched}/{len(final_data)} records matched with SRS data"
+                f" (RES156={res156_count} RES169={res169_count} RES123={res123_count})")
     return final_data, None
 
 
