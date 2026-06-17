@@ -552,6 +552,15 @@ def fetch_data():
     esim_resolutions = fetch_esim_resolutions()
     esim_matched = 0
     res156_count = res169_count = res123_count = 0
+    # Diagnostic: collect main data ntc_ids for cross-reference
+    main_ntc_ids = {str(row.get('ntc_id', '')) for row in final_data}
+    srs_res169_ids = {ntc_id for ntc_id, info in esim_resolutions.items() if info.get('RES169')}
+    res169_missing = srs_res169_ids - main_ntc_ids
+    res169_found   = srs_res169_ids & main_ntc_ids
+    logger.info(f"ESIM cross-check: {len(srs_res169_ids)} SRS ntc_ids have RES169=True"
+                f" | {len(res169_found)} exist in main data"
+                f" | {len(res169_missing)} missing from main data"
+                f" | missing samples: {sorted(list(res169_missing))[:5]}")
     for row in final_data:
         ntc_id = str(row.get('ntc_id', ''))
         res_info = esim_resolutions.get(ntc_id, {})
