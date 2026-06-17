@@ -773,11 +773,11 @@
                             <th>Res123</th>
                         </tr>
                         <tr class="column-filter-row">
-                            <th></th><th></th><th></th><th></th><th></th><th></th><th></th>
-                            <th></th><th></th><th></th><th></th><th></th><th></th><th></th>
-                            <th></th><th></th><th></th><th></th><th></th><th></th><th></th>
                             <th></th><th></th><th></th><th></th><th></th><th></th>
-                            <th></th><th></th><th></th>
+                            <th></th><th></th><th></th><th></th><th></th><th></th>
+                            <th></th><th></th><th></th><th></th><th></th><th></th>
+                            <th></th><th></th><th></th><th></th><th></th><th></th>
+                            <th></th><th></th><th></th><th></th><th></th><th></th>
                         </tr>
                     </thead>
                     <tbody></tbody>
@@ -890,9 +890,18 @@
             }},
             { data: 'Status', title: 'Status' },
             { data: 'PHASE', title: 'PHASE' },
-            { data: 'f_11_32A', title: '11.32A' },
-            { data: 'f_11_41', title: '11.41' },
-            { data: 'subtoc', title: 'subtoc' },
+            { data: 'f_11_32A', title: '11.32A', render: function(data, type) {
+                if (type === 'filter') { return data ? 'True' : 'False'; }
+                return data;
+            }},
+            { data: 'f_11_41', title: '11.41', render: function(data, type) {
+                if (type === 'filter') { return data ? 'True' : 'False'; }
+                return data;
+            }},
+            { data: 'subtoc', title: 'subtoc', render: function(data, type) {
+                if (type === 'filter') { return data ? 'True' : 'False'; }
+                return data;
+            }},
             { data: 'd_check_in', title: 'd_check_in', render: { 
                 display: function(data) { return formatDateToMMDDYYYY(data); },
                 sort: function(data) { return data || ''; }
@@ -1370,8 +1379,6 @@
 
             // Build column filters in header row
             function buildColumnFilters(api) {
-                var $filterRow = $('#ituTable thead .column-filter-row');
-                var $filterCells = $filterRow.find('th');
 
                 var dateColumns = ['BRREG', 'DateOfReceive', 'd_check_in', 'd_spr_out', 'PUB', 'PUB2', 'PUB3'];
                 var selectColumns = {
@@ -1388,21 +1395,52 @@
                     'RES123': ['', 'Yes', 'Empty']
                 };
 
-                // Use simple for-loop over columnConfig instead of api.columns().every()
-                // to avoid DataTables column-indexing issues when columns are hidden.
-                for (var colIdx = 0; colIdx < columnConfig.length; colIdx++) {
+                // Robust helper: extract the first DOM node from DataTables column().header()
+                // which may return a Node, Array, NodeList, or jQuery object depending on version.
+                function getFirstHeaderNode(api, colIdx) {
+                    try {
+                        var raw = api.column(colIdx).header();
+                        if (!raw) return null;
+                        // Single DOM node (most common case)
+                        if (raw.nodeType) return raw;
+                        // jQuery object
+                        if (raw.jquery && raw.length > 0) return raw[0];
+                        // Array or NodeList
+                        if (raw.length !== undefined && raw.length > 0 && raw[0] && raw[0].nodeType) return raw[0];
+                        return null;
+                    } catch(e) { return null; }
+                }
+
+                var $filterRow = $('#ituTable thead .column-filter-row');
+                var $filterCells = $filterRow.find('th');
+                var builtCount = 0, skippedHidden = 0, skippedError = 0;
+                for (let colIdx = 0; colIdx < columnConfig.length; colIdx++) {
                     try {
                     var dataSrc = columnConfig[colIdx].data;
-                    $filterCells = $('#ituTable thead .column-filter-row th');
-                    if (colIdx >= $filterCells.length) continue;
-                    var $th = $($filterCells[colIdx]);
+
+                    // Try DataTables API first, then fall back to positional indexing
+                    var $th = null;
+                    var headerEl = getFirstHeaderNode(api, colIdx);
+                    if (headerEl) {
+                        var cellIndex = $(headerEl).index();
+                        $th = $filterCells.eq(cellIndex);
+                    }
+                    // Fallback: positional indexing (works when filter row matches columnConfig)
+                    if (!$th || $th.length === 0) {
+                        if (colIdx < $filterCells.length) {
+                            $th = $filterCells.eq(colIdx);
+                        }
+                    }
+                    if (!$th || $th.length === 0) { skippedError++; continue; }
                     $th.empty();
                     
-                    var colVisible = columnVisibility[colIdx];
+                    // Ask DataTables directly for actual visibility (ground truth)
+                    var colVisible = api.column(colIdx).visible();
                     if (colVisible) {
                         $th.show();
                     } else {
                         $th.hide();
+                        skippedHidden++;
                         continue;
                     }
 
@@ -1795,18 +1833,45 @@
                             }
                         });
                     }
+                    builtCount++;
                     } catch(e) {
-                        console.warn('Filter build failed for col', colIdx, e);
+                        skippedError++;
+                        console.warn('Filter build failed for col', colIdx, dataSrc, e);
                     }
                 }  // end for loop over columnConfig
+                console.log('buildColumnFilters: built=' + builtCount + ' hidden=' + skippedHidden + ' errors=' + skippedError + ' filterCells=' + $filterCells.length);
             }
             
             // Sync filter row visibility with column visibility
             function syncFilterRowVisibility() {
+                if (!table) return;
                 var $filterCells = $('#ituTable thead .column-filter-row th');
                 columnConfig.forEach(function(col, idx) {
-                    var $th = $($filterCells[idx]);
-                    if (columnVisibility[idx]) {
+                    // Try DataTables API first, fall back to positional indexing
+                    var $th = null;
+                    try {
+                        var raw = table.column(idx).header();
+                        if (raw) {
+                            var firstEl = null;
+                            if (raw.nodeType) firstEl = raw;
+                            else if (raw.jquery && raw.length > 0) firstEl = raw[0];
+                            else if (raw.length !== undefined && raw.length > 0 && raw[0] && raw[0].nodeType) firstEl = raw[0];
+                            if (firstEl) {
+                                var cellIndex = $(firstEl).index();
+                                $th = $filterCells.eq(cellIndex);
+                            }
+                        }
+                    } catch(e) {}
+                    // Fallback to positional indexing
+                    if (!$th || $th.length === 0) {
+                        if (idx < $filterCells.length) {
+                            $th = $filterCells.eq(idx);
+                        }
+                    }
+                    if (!$th || $th.length === 0) return;
+                    // Ask DataTables directly for actual visibility
+                    var colVisible = table.column(idx).visible();
+                    if (colVisible) {
                         $th.show();
                     } else {
                         $th.hide();
