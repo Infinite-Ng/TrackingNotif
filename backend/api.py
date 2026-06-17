@@ -229,12 +229,15 @@ def fetch_esim_resolutions():
         ntc_ids = set(str(row[1]) for row in group_rows if row[1] is not None)
         ntc_type_lookup = {}
         if ntc_ids:
-            # Build IN clause in batches of 500 to avoid query length limits
+            # Build IN clause in batches of 500 to avoid query length limits.
+            # IMPORTANT: ntc_id is a TEXT field in Access, so each value MUST be
+            # single-quoted. Unquoted numeric-like strings may silently fail type
+            # coercion in Access, causing missing matches.
             ntc_ids_list = list(ntc_ids)
             batch_size = 500
             for i in range(0, len(ntc_ids_list), batch_size):
                 batch = ntc_ids_list[i:i+batch_size]
-                placeholders = ','.join(batch)
+                placeholders = ','.join(f"'{ntc_id}'" for ntc_id in batch)
                 cursor.execute(f"""
                     SELECT ntc_id, ntc_type
                     FROM [notice]
@@ -242,21 +245,59 @@ def fetch_esim_resolutions():
                 """)
                 for row in cursor.fetchall():
                     ntc_type_lookup[str(row[0])] = row[1]
-        logger.info(f"SRS Step 2: {len(ntc_type_lookup)} ntc_ids with ntc_type")
+        ntc_ids_without_type = len(ntc_ids) - len(ntc_type_lookup)
+        logger.info(f"SRS Step 2: {len(ntc_type_lookup)} ntc_ids with ntc_type"
+                    f" ({ntc_ids_without_type} missing ntc_type)")
 
         # Step 3: Classify each group row and aggregate by ntc_id
+        res_hits = {'RES156': 0, 'RES169': 0, 'RES123': 0}
+        res_miss_class = {'RES156': 0, 'RES169': 0, 'RES123': 0}
+        res_miss_orbit = {'RES156': 0, 'RES169': 0, 'RES123': 0}
+        res_miss_freq  = {'RES156': 0, 'RES169': 0, 'RES123': 0}
+        freq_samples_logged = 0
         for row in group_rows:
             e_srvcls = row[0]
             ntc_id = str(row[1]) if row[1] is not None else None
             if ntc_id is None:
                 continue
             ntc_type = ntc_type_lookup.get(ntc_id)
+            # Log a few frequency samples for unit diagnostics (GHz vs MHz)
+            if freq_samples_logged < 5 and row[3] is not None and row[4] is not None:
+                logger.info(f"SRS freq sample: ntc_id={ntc_id} freq_min={row[3]}"
+                            f" freq_max={row[4]} stn_cls={e_srvcls} ntc_type={ntc_type}")
+                freq_samples_logged += 1
             cls_result = _classify_single(e_srvcls, row[3], row[4], ntc_type)
             if ntc_id not in result:
                 result[ntc_id] = {'RES156': False, 'RES169': False, 'RES123': False}
             for res_key in ('RES156', 'RES169', 'RES123'):
                 if cls_result[res_key]:
                     result[ntc_id][res_key] = True
+                    res_hits[res_key] += 1
+
+        # Per-resolution diagnostic: count groups that passed class+orbit but failed freq
+        for row in group_rows:
+            e_srvcls = str(row[0] or '').strip().upper()
+            ntc_id = str(row[1]) if row[1] is not None else None
+            if ntc_id is None:
+                continue
+            ntc_type = ntc_type_lookup.get(ntc_id)
+            if ntc_type:
+                ntc_type = str(ntc_type).strip().upper()
+            for res_key, rule in _RES_RULES.items():
+                if e_srvcls not in rule['classes']:
+                    res_miss_class[res_key] += 1
+                    continue
+                if ntc_type != rule['orbit']:
+                    res_miss_orbit[res_key] += 1
+                    continue
+                if not _freq_overlaps_any(row[3] or 0, row[4] or 0, rule['freq_bands']):
+                    res_miss_freq[res_key] += 1
+
+        for res_key in ('RES156', 'RES169', 'RES123'):
+            logger.info(f"SRS {res_key}: {res_hits[res_key]} group-hits"
+                        f" | miss-class={res_miss_class[res_key]}"
+                        f" miss-orbit={res_miss_orbit[res_key]}"
+                        f" miss-freq={res_miss_freq[res_key]}")
 
         logger.info(f"ESIM classification complete: {len(result)} ntc_ids with ESIM classes")
     except Exception as e:
