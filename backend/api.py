@@ -230,14 +230,12 @@ def fetch_esim_resolutions():
         ntc_type_lookup = {}
         if ntc_ids:
             # Build IN clause in batches of 500 to avoid query length limits.
-            # IMPORTANT: ntc_id is a TEXT field in Access, so each value MUST be
-            # single-quoted. Unquoted numeric-like strings may silently fail type
-            # coercion in Access, causing missing matches.
+            # NOTE: ntc_id in Access [notice] table is NUMERIC - do NOT single-quote.
             ntc_ids_list = list(ntc_ids)
             batch_size = 500
             for i in range(0, len(ntc_ids_list), batch_size):
                 batch = ntc_ids_list[i:i+batch_size]
-                placeholders = ','.join(f"'{ntc_id}'" for ntc_id in batch)
+                placeholders = ','.join(batch)
                 cursor.execute(f"""
                     SELECT ntc_id, ntc_type
                     FROM [notice]
