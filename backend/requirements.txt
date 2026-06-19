@@ -2,3 +2,8 @@
 flask>=2.3.0
 flask-cors>=4.0.0
 pyodbc>=4.0.39
+# Production WSGI server (Windows-friendly). Use instead of the Flask dev
+# server for stability under concurrent users. Note: waitress does not do TLS
+# itself — terminate HTTPS at IIS (reverse proxy) and run waitress over plain
+# HTTP behind it. See README.
+waitress>=3.0.0

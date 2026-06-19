@@ -11,6 +11,7 @@ from flask import Flask, jsonify, send_from_directory, request
 from flask_cors import CORS
 from datetime import date, datetime, timezone
 import logging
+import threading
 from functools import wraps
 
 # Configure logging
@@ -110,9 +111,6 @@ def _sync_local_files():
         except Exception as e:
             logger.warning(f"Could not sync {label} from network ({e}); using existing local copy.")
 
-
-# Initial sync at startup
-_sync_local_files()
 
 SQL_SERVER_CONN_STRING = (
     "DRIVER={SQL Server};"
@@ -306,11 +304,12 @@ def fetch_esim_resolutions():
     return result
 
 
-def get_mdb_connection(retries=3, delay=5):
+def get_mdb_connection(retries=3, delay=2):
     """Connects to the local copy of the MDB database.
-    Syncs local files from the network first; retries on transient errors."""
-    # Refresh local copies before connecting
-    _sync_local_files()
+
+    Does NOT sync from the network here — syncing is handled out-of-band by the
+    background refresher so that user requests never block on a slow/locked
+    network share. Retries briefly on transient ODBC errors only."""
     conn_str = (
         f'DRIVER={{Microsoft Access Driver (*.mdb, *.accdb)}};'
         f'DBQ={LOCAL_MDB_PATH};'
@@ -581,56 +580,127 @@ def fetch_data():
     return final_data, None
 
 
+# ============================================================================
+# In-memory cache + background refresher
+# ----------------------------------------------------------------------------
+# User requests must never block on a slow database or a locked network share.
+# Strategy (stale-while-revalidate):
+#   * /api/data ALWAYS returns whatever is in the in-memory cache, instantly.
+#   * A single background thread periodically re-runs fetch_data() and the
+#     network file sync; only it ever touches the DB on a timer.
+#   * /api/refresh just asks the background thread to refresh ASAP; it does not
+#     run the query inline, so it can never hang the caller.
+# ============================================================================
+
+# Seconds between automatic background refreshes.
+_REFRESH_INTERVAL = int(os.environ.get('REFRESH_INTERVAL_SECONDS', '300'))
+
+_cache_lock = threading.Lock()
+_cache = {
+    'data': None,          # list[dict] | None  (None until first successful load)
+    'generated_at': None,  # ISO timestamp of last successful load
+    'error': None,         # last error string, if the most recent attempt failed
+}
+# Signals the background thread to refresh immediately instead of waiting.
+_refresh_now = threading.Event()
+
+
+def _write_cache_files(cache_payload):
+    """Persist the cache to disk locations used as an offline fallback by the
+    Flask-served and IIS-served frontends. Best-effort; never raises."""
+    cache_targets = [
+        # 1. Local path – served by Flask at /data/cached_data.json
+        os.path.join(FRONTEND_DIR, 'data', 'cached_data.json'),
+        # 2. IIS file-share path – served as a static file by IIS
+        r'\\intweb.itu.int\intwebroot\ITU-R\space\css\notification\data\cached_data.json',
+    ]
+    for cache_path in cache_targets:
+        try:
+            os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+            with open(cache_path, 'w', encoding='utf-8') as _cf:
+                json.dump(cache_payload, _cf, ensure_ascii=False)
+            logger.info(f"Cache saved to {cache_path}")
+        except Exception as _ce:
+            logger.warning(f"Could not save cache to {cache_path}: {_ce}")
+
+
+def _refresh_cache_once():
+    """Sync network files, re-query the databases, and update the in-memory
+    cache + on-disk fallback. Runs ONLY on the background thread."""
+    logger.info("Background refresh: syncing network files...")
+    _sync_local_files()
+    data, error = fetch_data()
+    now_iso = datetime.now(timezone.utc).isoformat()
+    if error:
+        # Keep serving the previous good data; just record the error.
+        with _cache_lock:
+            _cache['error'] = error
+        logger.warning(f"Background refresh failed, keeping previous cache: {error}")
+        return
+    with _cache_lock:
+        _cache['data'] = data
+        _cache['generated_at'] = now_iso
+        _cache['error'] = None
+    _write_cache_files({'generated_at': now_iso, 'data': data})
+    logger.info(f"Background refresh complete: {len(data)} records at {now_iso}")
+
+
+def _background_refresher():
+    """Daemon loop: refresh on startup, then every _REFRESH_INTERVAL seconds,
+    or immediately whenever _refresh_now is set."""
+    while True:
+        try:
+            _refresh_cache_once()
+        except Exception as e:
+            logger.error(f"Unexpected error in background refresher: {e}")
+        # Wait for the interval OR an explicit refresh request, whichever first.
+        _refresh_now.wait(timeout=_REFRESH_INTERVAL)
+        _refresh_now.clear()
+
+
 @app.route('/api/data', methods=['GET'])
 @rate_limit
 def get_data():
     """
     API endpoint to fetch all tracking data.
-    Returns JSON array of notice records.
+    Returns the in-memory cache instantly (stale-while-revalidate); never
+    queries the database inline, so it cannot hang on a slow DB/network share.
     """
-    try:
-        data, error = fetch_data()
-        if error:
-            return jsonify({
-                'success': False,
-                'error': error,
-                'data': []
-            }), 500
+    with _cache_lock:
+        data = _cache['data']
+        generated_at = _cache['generated_at']
+        error = _cache['error']
 
-        # Save a local cache for offline fallback
-        now_iso = datetime.now(timezone.utc).isoformat()
-        cache_payload = {'generated_at': now_iso, 'data': data}
-
-        # Write to multiple locations so both Flask-served and IIS-served frontends
-        # can fall back to cached data when the backend is offline.
-        cache_targets = [
-            # 1. Local path – served by Flask at /data/cached_data.json
-            os.path.join(FRONTEND_DIR, 'data', 'cached_data.json'),
-            # 2. IIS file-share path – served as a static file by IIS
-            r'\\intweb.itu.int\intwebroot\ITU-R\space\css\notification\data\cached_data.json',
-        ]
-        for cache_path in cache_targets:
-            try:
-                os.makedirs(os.path.dirname(cache_path), exist_ok=True)
-                with open(cache_path, 'w', encoding='utf-8') as _cf:
-                    json.dump(cache_payload, _cf, ensure_ascii=False)
-                logger.info(f"Cache saved to {cache_path}")
-            except Exception as _ce:
-                logger.warning(f"Could not save cache to {cache_path}: {_ce}")
-
-        return jsonify({
-            'success': True,
-            'count': len(data),
-            'timestamp': now_iso,
-            'data': data
-        })
-    except Exception as e:
-        logger.error(f"API error: {e}")
+    if data is None:
+        # Cache not warmed yet (very first request after startup).
         return jsonify({
             'success': False,
-            'error': str(e),
+            'error': error or 'Data is still loading, please retry in a moment.',
             'data': []
-        }), 500
+        }), 503
+
+    return jsonify({
+        'success': True,
+        'count': len(data),
+        'timestamp': generated_at,
+        'stale': error is not None,  # True => last refresh failed; data may be old
+        'data': data
+    })
+
+
+@app.route('/api/refresh', methods=['GET', 'POST'])
+@rate_limit
+def refresh_data():
+    """Ask the background refresher to reload ASAP. Returns immediately —
+    the refresh happens off the request path, so this never blocks."""
+    _refresh_now.set()
+    with _cache_lock:
+        generated_at = _cache['generated_at']
+    return jsonify({
+        'success': True,
+        'message': 'Refresh scheduled.',
+        'current_timestamp': generated_at
+    }), 202
 
 
 @app.route('/api/health', methods=['GET'])
@@ -653,6 +723,15 @@ def serve_main():
 def serve_frontend(filename):
     """Serve frontend static files (HTML, data, etc.)."""
     return send_from_directory(FRONTEND_DIR, filename)
+
+
+# Start the background refresher as a daemon thread as soon as the module is
+# imported. This works whether the app is launched via `python api.py` or via a
+# WSGI server (waitress/gunicorn), so the cache is warmed in both cases.
+_refresher_thread = threading.Thread(
+    target=_background_refresher, name='cache-refresher', daemon=True
+)
+_refresher_thread.start()
 
 
 if __name__ == '__main__':
