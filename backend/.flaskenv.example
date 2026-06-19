@@ -1,0 +1,23 @@
+# Copy this file to ".flaskenv" and fill in real values.
+# ".flaskenv" is git-ignored and must NEVER be committed.
+
+FLASK_APP=api.py
+FLASK_DEBUG=0
+FLASK_RUN_HOST=0.0.0.0
+FLASK_RUN_PORT=5001
+
+# --- Database credentials (required) ---
+# SQL Server (SpaceNetworkSystem)
+SQL_SERVER_HOST=sydney.itu.int
+SQL_SERVER_DB=SpaceNetworkSystem
+SQL_SERVER_USER=sns_a
+SQL_SERVER_PASSWORD=
+
+# MS Access (SNTRACK)
+MDB_USER=spruser01
+MDB_PASSWORD=
+
+# --- Optional ---
+# SRS_MDB_PATH=\\blue\dfs\br\BR_DATA\SPACE\SRS_DB\srs_all.mdb
+# FRONTEND_ORIGIN=https://intweb.itu.int
+# REFRESH_INTERVAL_SECONDS=300

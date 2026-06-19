@@ -86,8 +86,22 @@ FRONTEND_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'f
 # (mapped drive letters like M: are not visible in elevated sessions)
 _NET_MDB = r'\\blue\dfs\br\BR_DATA\SPACE\SNTRACK\sntrdat.mdb'
 _NET_MDW = r'\\blue\dfs\br\BR_DATA\SPACE\SNTRACK\sntrapp.mdw'
+def _require_secret(env_name):
+    """Read a secret from the environment. Returns '' if unset and logs a clear
+    warning, so the app starts but DB connections fail loudly rather than
+    silently using a hardcoded password baked into the source."""
+    value = os.environ.get(env_name)
+    if not value:
+        logger.warning(
+            f"Environment variable {env_name} is not set. Database connections "
+            f"requiring it will fail. Set it before starting (see .flaskenv.example)."
+        )
+        return ''
+    return value
+
+
 MDB_USERNAME = os.environ.get('MDB_USER', 'spruser01')
-MDB_PASSWORD = os.environ.get('MDB_PASSWORD', 'spruser01')
+MDB_PASSWORD = _require_secret('MDB_PASSWORD')
 
 # Local data directory – files here are used for all connections.
 # Manually pre-seeded; auto-refreshed on every /api/data request.
@@ -117,7 +131,7 @@ SQL_SERVER_CONN_STRING = (
     f"SERVER={os.environ.get('SQL_SERVER_HOST', 'sydney.itu.int')};"
     f"DATABASE={os.environ.get('SQL_SERVER_DB', 'SpaceNetworkSystem')};"
     f"UID={os.environ.get('SQL_SERVER_USER', 'sns_a')};"
-    f"PWD={os.environ.get('SQL_SERVER_PASSWORD', 'sns_a_5678')};"
+    f"PWD={_require_secret('SQL_SERVER_PASSWORD')};"
 )
 
 # --- SRS Database (ESIM Resolution Classification) ---

@@ -1,0 +1,26 @@
+# --- Secrets / credentials (NEVER commit) ---
+*.pem
+.flaskenv
+.env
+*.env
+
+# --- Local databases / data copies ---
+data/
+*.mdb
+*.mdw
+frontend/data/cached_data.json
+
+# --- Python bytecode / caches ---
+__pycache__/
+*.py[cod]
+*$py.class
+
+# --- Logs ---
+*.log
+dataTransfer/update_log.txt
+
+# --- OS / editor cruft ---
+Thumbs.db
+.DS_Store
+.vscode/
+.idea/
