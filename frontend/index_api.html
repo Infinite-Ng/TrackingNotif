@@ -1385,15 +1385,12 @@
                         var data = Array.isArray(cached) ? cached : (cached.data || []);
                         var generatedAt = cached.generated_at || null;
 
-                        var filteredData = data.filter(function(row) {
-                            return row.sntrack_id && row.sntrack_id.toString().trim() !== '';
-                        });
-                        console.log('Loaded from cache:', filteredData.length, 'records');
+                        console.log('Loaded from cache:', data.length, 'records');
 
-                        allData = filteredData;
-                        populateADMFilter(filteredData);
-                        populateStatusFilter(filteredData);
-                        initTable(filteredData);
+                        allData = data;
+                        populateADMFilter(data);
+                        populateStatusFilter(data);
+                        initTable(data);
 
                         var timeLabel = generatedAt
                             ? new Date(generatedAt).toLocaleString()
@@ -1429,16 +1426,12 @@
                             updateApiStatus('connected', 'Connected - ' + response.count + ' records');
                             
                             var data = response.data;
-                            // Filter out records with empty SNTrack ID
-                            var filteredData = data.filter(function(row) {
-                                return row.sntrack_id && row.sntrack_id.toString().trim() !== '';
-                            });
-                            console.log('After filtering empty SNTrack:', filteredData.length, 'records');
+                            console.log('API returned:', data.length, 'records');
                             
-                            allData = filteredData;
-                            populateADMFilter(filteredData);
-                            populateStatusFilter(filteredData);
-                            initTable(filteredData);
+                            allData = data;
+                            populateADMFilter(data);
+                            populateStatusFilter(data);
+                            initTable(data);
                         } else {
                             console.error('API returned error:', response.error);
                             updateApiStatus('error', 'Error: ' + response.error);
@@ -1477,13 +1470,10 @@
                                 var backupData = Array.isArray(backup) ? backup : (backup.data || []);
                                 var generatedAt = backup.generated_at || null;
 
-                                var filteredData = backupData.filter(function(row) {
-                                    return row.sntrack_id && row.sntrack_id.toString().trim() !== '';
-                                });
-                                allData = filteredData;
-                                populateADMFilter(filteredData);
-                                populateStatusFilter(filteredData);
-                                initTable(filteredData);
+                                allData = backupData;
+                                populateADMFilter(backupData);
+                                populateStatusFilter(backupData);
+                                initTable(backupData);
 
                                 var timeLabel = generatedAt
                                     ? new Date(generatedAt).toLocaleString()
@@ -2276,12 +2266,9 @@
                             timeout: 30000,
                             success: function(response) {
                                 if (response.success) {
-                                    var filteredData = response.data.filter(function(row) {
-                                        return row.sntrack_id && row.sntrack_id.toString().trim() !== '';
-                                    });
-                                    allData = filteredData;
-                                    populateStatusFilter(filteredData);
-                                    table.clear().rows.add(filteredData).draw();
+                                    allData = response.data;
+                                    populateStatusFilter(response.data);
+                                    table.clear().rows.add(response.data).draw();
                                     var now = new Date();
                                     $('#lastUpdated').text('Synced: ' + now.toLocaleTimeString() + ' (' + filteredData.length + ' records)');
                                     updateApiStatus('connected', 'Connected - ' + filteredData.length + ' records');
