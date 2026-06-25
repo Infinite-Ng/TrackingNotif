@@ -7,12 +7,16 @@ import os
 import shutil
 import time
 import pyodbc
+from dotenv import load_dotenv
 from flask import Flask, jsonify, send_from_directory, request
 from flask_cors import CORS
 from datetime import date, datetime, timezone
 import logging
 import threading
 from functools import wraps
+
+# Load .flaskenv / .env before reading os.environ
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), '.flaskenv'))
 
 # Configure logging
 logging.basicConfig(
@@ -598,16 +602,16 @@ def fetch_data():
 # In-memory cache + background refresher
 # ----------------------------------------------------------------------------
 # User requests must never block on a slow database or a locked network share.
-# Strategy (stale-while-revalidate):
+# Strategy:
+#   * On startup, load the latest cached_data.json into memory instantly.
 #   * /api/data ALWAYS returns whatever is in the in-memory cache, instantly.
-#   * A single background thread periodically re-runs fetch_data() and the
-#     network file sync; only it ever touches the DB on a timer.
-#   * /api/refresh just asks the background thread to refresh ASAP; it does not
-#     run the query inline, so it can never hang the caller.
+#   * A background thread refreshes every _REFRESH_INTERVAL seconds (default
+#     10 min) and also when /api/refresh is called. The refresh runs off the
+#     request path, so the caller is never blocked.
 # ============================================================================
 
-# Seconds between automatic background refreshes.
-_REFRESH_INTERVAL = int(os.environ.get('REFRESH_INTERVAL_SECONDS', '300'))
+# Seconds between automatic background refreshes (default: 10 minutes).
+_REFRESH_INTERVAL = int(os.environ.get('REFRESH_INTERVAL_SECONDS', '600'))
 
 _cache_lock = threading.Lock()
 _cache = {
@@ -617,6 +621,25 @@ _cache = {
 }
 # Signals the background thread to refresh immediately instead of waiting.
 _refresh_now = threading.Event()
+
+
+def _load_cache_from_disk():
+    """Try to load cached_data.json from disk into the in-memory cache.
+    Called at startup so /api/data can serve instantly without a DB fetch."""
+    cache_path = os.path.join(FRONTEND_DIR, 'data', 'cached_data.json')
+    try:
+        with open(cache_path, 'r', encoding='utf-8') as _cf:
+            cached = json.load(_cf)
+        if cached.get('data') and cached.get('generated_at'):
+            with _cache_lock:
+                _cache['data'] = cached['data']
+                _cache['generated_at'] = cached['generated_at']
+                _cache['error'] = None
+            logger.info(f"Loaded {len(cached['data'])} records from disk cache (generated {cached['generated_at'][:19]})")
+            return True
+    except Exception as e:
+        logger.warning(f"Could not load disk cache: {e}")
+    return False
 
 
 def _write_cache_files(cache_payload):
@@ -660,16 +683,19 @@ def _refresh_cache_once():
 
 
 def _background_refresher():
-    """Daemon loop: refresh on startup, then every _REFRESH_INTERVAL seconds,
-    or immediately whenever _refresh_now is set."""
+    """Daemon loop: does NOT refresh on startup (cache loaded from disk).
+    Waits for the periodic timer OR an explicit /api/refresh request, then
+    runs one refresh cycle."""
     while True:
+        # Wait for the interval OR an explicit refresh request, whichever first.
+        # On the very first iteration this means the first auto-refresh happens
+        # after _REFRESH_INTERVAL seconds, not immediately at startup.
+        _refresh_now.wait(timeout=_REFRESH_INTERVAL)
+        _refresh_now.clear()
         try:
             _refresh_cache_once()
         except Exception as e:
             logger.error(f"Unexpected error in background refresher: {e}")
-        # Wait for the interval OR an explicit refresh request, whichever first.
-        _refresh_now.wait(timeout=_REFRESH_INTERVAL)
-        _refresh_now.clear()
 
 
 @app.route('/api/data', methods=['GET'])
@@ -739,9 +765,14 @@ def serve_frontend(filename):
     return send_from_directory(FRONTEND_DIR, filename)
 
 
-# Start the background refresher as a daemon thread as soon as the module is
-# imported. This works whether the app is launched via `python api.py` or via a
-# WSGI server (waitress/gunicorn), so the cache is warmed in both cases.
+# 1. Load the latest cached data from disk so /api/data responds instantly.
+# 2. Start the background refresher daemon — it waits for /api/refresh calls
+#    instead of auto-fetching on startup.
+_loaded = _load_cache_from_disk()
+if not _loaded:
+    logger.warning("No disk cache found — /api/data will return 503 until "
+                   "/api/refresh is called to perform the first data fetch.")
+
 _refresher_thread = threading.Thread(
     target=_background_refresher, name='cache-refresher', daemon=True
 )

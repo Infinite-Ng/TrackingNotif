@@ -431,6 +431,62 @@
             background-color: #dc3545;
         }
 
+        /* === Dev Mode Toggle === */
+        .dev-mode-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-left: auto;
+            font-size: 0.78rem;
+            color: #6c757d;
+            user-select: none;
+        }
+        .dev-mode-toggle .toggle-switch {
+            position: relative;
+            width: 38px;
+            height: 20px;
+            flex-shrink: 0;
+        }
+        .dev-mode-toggle .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .dev-mode-toggle .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #ccc;
+            border-radius: 20px;
+            transition: 0.25s;
+        }
+        .dev-mode-toggle .toggle-slider::before {
+            content: "";
+            position: absolute;
+            height: 14px;
+            width: 14px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            border-radius: 50%;
+            transition: 0.25s;
+        }
+        .dev-mode-toggle input:checked + .toggle-slider {
+            background-color: var(--itu-blue);
+        }
+        .dev-mode-toggle input:checked + .toggle-slider::before {
+            transform: translateX(18px);
+        }
+        .dev-only {
+            display: none;
+        }
+        body.dev-mode .dev-only {
+            display: flex;
+        }
+        body.dev-mode #certTrustBanner.dev-only.active {
+            display: block;
+        }
+
         /* ===== Multi-select dropdown (in-table column header) ===== */
         .multi-select-dropdown {
             position: relative;
@@ -647,8 +703,8 @@
 </head>
 <body>
 
-    <!-- Certificate Trust Banner -->
-    <div id="certTrustBanner" style="display:none; background:#fff3cd; border-bottom:2px solid #ffc107; padding:10px 24px; font-size:0.9rem; z-index:9999; position:relative;">
+    <!-- Certificate Trust Banner (only visible in Dev Mode) -->
+    <div id="certTrustBanner" class="dev-only" style="background:#fff3cd; border-bottom:2px solid #ffc107; padding:10px 24px; font-size:0.9rem; z-index:9999; position:relative;">
         <strong><i class="fas fa-exclamation-triangle" style="color:#e67e00;"></i> Action required – trust the API certificate:</strong>
         &nbsp;Open <a href="https://156.106.168.185:5001/api/health" target="_blank" style="color:#0070c0;font-weight:600;">https://156.106.168.185:5001/api/health</a>
         in this browser, click <em>Advanced &rarr; Proceed</em>, then <a href="javascript:location.reload()" style="color:#0070c0;font-weight:600;">reload this page</a>.
@@ -663,9 +719,16 @@
     <div class="header-area">
         <img src="./logo-itu-slogan.svg" class="header-logo" alt="ITU Logo">
         <div class="header-title">Notice Tracking</div>
-        <div id="apiStatus" class="api-status">
+        <div id="apiStatus" class="api-status dev-only">
             <span class="status-dot"></span>
             <span class="status-text">Connecting...</span>
+        </div>
+        <div class="dev-mode-toggle">
+            <label class="toggle-switch">
+                <input type="checkbox" id="devModeCheckbox">
+                <span class="toggle-slider"></span>
+            </label>
+            <span>Dev Mode</span>
         </div>
     </div>
 
@@ -966,6 +1029,28 @@
             $apiStatus.find('.status-text').text(message);
         }
 
+        // ==========================================
+        // Dev Mode Toggle
+        // ==========================================
+        (function initDevMode() {
+            var $body = $('body');
+            var $checkbox = $('#devModeCheckbox');
+            var saved = localStorage.getItem('devMode') === 'true';
+
+            function apply(active) {
+                $body.toggleClass('dev-mode', active);
+                $checkbox.prop('checked', active);
+                localStorage.setItem('devMode', active ? 'true' : 'false');
+            }
+
+            // Restore saved preference
+            if (saved) apply(true);
+
+            $checkbox.on('change', function() {
+                apply(this.checked);
+            });
+        })();
+
         // Show/hide loading overlay
         function showLoading(show, message) {
             const $overlay = $('#loadingOverlay');
@@ -1155,7 +1240,7 @@
                             table.column(idx).visible(columnVisibility[idx]);
                         });
                         buildColumnChips();
-                        syncFilterRowVisibility();
+                        // buildColumnFilters is called right after in initComplete
                     }
                 } catch(e) {
                     console.warn('Cannot restore column settings:', e);
@@ -1281,7 +1366,52 @@
             }
 
             // ==========================================
-            // Load data from API
+            // Load data from local cache on page open (instant)
+            // The backend refresh thread keeps cached_data.json up to date
+            // every 10 minutes. Use the Refresh button to pull fresh data
+            // from the API on demand.
+            // ==========================================
+            function loadDataFromCache() {
+                showLoading(true, 'Loading data...');
+                updateApiStatus('', 'Loading...');
+
+                $.ajax({
+                    url: './data/cached_data.json',
+                    dataType: 'json',
+                    timeout: 10000,
+                    success: function(cached) {
+                        showLoading(false);
+                        // Support both wrapped format {generated_at, data} and plain array
+                        var data = Array.isArray(cached) ? cached : (cached.data || []);
+                        var generatedAt = cached.generated_at || null;
+
+                        var filteredData = data.filter(function(row) {
+                            return row.sntrack_id && row.sntrack_id.toString().trim() !== '';
+                        });
+                        console.log('Loaded from cache:', filteredData.length, 'records');
+
+                        allData = filteredData;
+                        populateADMFilter(filteredData);
+                        populateStatusFilter(filteredData);
+                        initTable(filteredData);
+
+                        var timeLabel = generatedAt
+                            ? new Date(generatedAt).toLocaleString()
+                            : 'unknown time';
+                        $('#lastUpdated').text('Generated: ' + timeLabel + ' (' + filteredData.length + ' records)');
+                        updateApiStatus('connected', 'Connected - ' + filteredData.length + ' records');
+                    },
+                    error: function() {
+                        showLoading(false);
+                        updateApiStatus('error', 'No cached data available');
+                        $('#lastUpdated').html('<span style="color:red">No data available. Click Refresh to fetch from server.</span>');
+                        initTable([]);
+                    }
+                });
+            }
+
+            // ==========================================
+            // Load data from API (used by Refresh button)
             // ==========================================
             function loadDataFromAPI() {
                 showLoading(true, 'Fetching data from server...');
@@ -1320,8 +1450,9 @@
                         showLoading(false);
                         console.error('Failed to load data from API:', status, error);
                         // Show cert-trust banner if the request was blocked (status 0 = network/cert error)
+                        // Banner is only visible when Dev Mode is ON.
                         if (xhr.status === 0) {
-                            $('#certTrustBanner').show();
+                            $('#certTrustBanner').addClass('active');
                         }
                         updateApiStatus('error', 'Offline – using backup data');
 
@@ -1374,8 +1505,8 @@
                 });
             }
 
-            // Load data on page load
-            loadDataFromAPI();
+            // Load data on page load — reads cached_data.json instantly
+            loadDataFromCache();
 
             // Build column filters in header row
             function buildColumnFilters(api) {
@@ -1395,54 +1526,37 @@
                     'RES123': ['', 'Yes', 'Empty']
                 };
 
-                // Robust helper: extract the first DOM node from DataTables column().header()
-                // which may return a Node, Array, NodeList, or jQuery object depending on version.
-                function getFirstHeaderNode(api, colIdx) {
-                    try {
-                        var raw = api.column(colIdx).header();
-                        if (!raw) return null;
-                        // Single DOM node (most common case)
-                        if (raw.nodeType) return raw;
-                        // jQuery object
-                        if (raw.jquery && raw.length > 0) return raw[0];
-                        // Array or NodeList
-                        if (raw.length !== undefined && raw.length > 0 && raw[0] && raw[0].nodeType) return raw[0];
-                        return null;
-                    } catch(e) { return null; }
+                // ---- Rebuild the filter row from scratch every time ----
+                // DataTables may mangle custom <tr> elements inside <thead>
+                // when columns are toggled & .draw() is called, so we never
+                // rely on pre-existing filter-row DOM state.
+                var $oldRow = $('#ituTable thead .column-filter-row');
+                var $newRow = $('<tr class="column-filter-row"></tr>');
+                for (let i = 0; i < columnConfig.length; i++) {
+                    $newRow.append('<th></th>');
                 }
+                if ($oldRow.length) {
+                    $oldRow.replaceWith($newRow);
+                } else {
+                    $('#ituTable thead').append($newRow);
+                }
+                var $filterCells = $newRow.find('th');
 
-                var $filterRow = $('#ituTable thead .column-filter-row');
-                var $filterCells = $filterRow.find('th');
                 var builtCount = 0, skippedHidden = 0, skippedError = 0;
                 for (let colIdx = 0; colIdx < columnConfig.length; colIdx++) {
                     try {
                     var dataSrc = columnConfig[colIdx].data;
-
-                    // Try DataTables API first, then fall back to positional indexing
-                    var $th = null;
-                    var headerEl = getFirstHeaderNode(api, colIdx);
-                    if (headerEl) {
-                        var cellIndex = $(headerEl).index();
-                        $th = $filterCells.eq(cellIndex);
-                    }
-                    // Fallback: positional indexing (works when filter row matches columnConfig)
-                    if (!$th || $th.length === 0) {
-                        if (colIdx < $filterCells.length) {
-                            $th = $filterCells.eq(colIdx);
-                        }
-                    }
+                    var $th = $filterCells.eq(colIdx);
                     if (!$th || $th.length === 0) { skippedError++; continue; }
-                    $th.empty();
-                    
-                    // Ask DataTables directly for actual visibility (ground truth)
+
+                    // Ask DataTables directly for actual visibility
                     var colVisible = api.column(colIdx).visible();
-                    if (colVisible) {
-                        $th.show();
-                    } else {
+                    if (!colVisible) {
                         $th.hide();
                         skippedHidden++;
                         continue;
                     }
+                    $th.show();
 
                     if (dateColumns.includes(dataSrc)) {
                         var $dateFilter = $('<div class="column-filter-date">' +
@@ -1840,43 +1954,6 @@
                     }
                 }  // end for loop over columnConfig
                 console.log('buildColumnFilters: built=' + builtCount + ' hidden=' + skippedHidden + ' errors=' + skippedError + ' filterCells=' + $filterCells.length);
-            }
-            
-            // Sync filter row visibility with column visibility
-            function syncFilterRowVisibility() {
-                if (!table) return;
-                var $filterCells = $('#ituTable thead .column-filter-row th');
-                columnConfig.forEach(function(col, idx) {
-                    // Try DataTables API first, fall back to positional indexing
-                    var $th = null;
-                    try {
-                        var raw = table.column(idx).header();
-                        if (raw) {
-                            var firstEl = null;
-                            if (raw.nodeType) firstEl = raw;
-                            else if (raw.jquery && raw.length > 0) firstEl = raw[0];
-                            else if (raw.length !== undefined && raw.length > 0 && raw[0] && raw[0].nodeType) firstEl = raw[0];
-                            if (firstEl) {
-                                var cellIndex = $(firstEl).index();
-                                $th = $filterCells.eq(cellIndex);
-                            }
-                        }
-                    } catch(e) {}
-                    // Fallback to positional indexing
-                    if (!$th || $th.length === 0) {
-                        if (idx < $filterCells.length) {
-                            $th = $filterCells.eq(idx);
-                        }
-                    }
-                    if (!$th || $th.length === 0) return;
-                    // Ask DataTables directly for actual visibility
-                    var colVisible = table.column(idx).visible();
-                    if (colVisible) {
-                        $th.show();
-                    } else {
-                        $th.hide();
-                    }
-                });
             }
 
             // Populate ADM filter from data
