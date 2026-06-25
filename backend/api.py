@@ -530,12 +530,15 @@ def fetch_data():
             if field not in merged_row:
                 merged_row[field] = ""
 
-        if is_empty_sntrack_id(merged_row.get('sntrack_id')):
-            continue
-
         # Add Status from Submissions table via SubmissionId
         submission_id = str(merged_row.get('SubmissionId', '')) if merged_row.get('SubmissionId') else ''
         merged_row['Status'] = status_lookup.get(submission_id, '')
+
+        # Keep records that have EITHER a valid sntrack_id OR a non-empty Status.
+        # Cases like "Submitted to BR" may not yet have an sntrack_id but should
+        # still appear in the tracking system via their e-submission Status.
+        if is_empty_sntrack_id(merged_row.get('sntrack_id')) and not merged_row.get('Status'):
+            continue
 
         final_data.append(convert_to_serializable(merged_row))
 
@@ -556,12 +559,15 @@ def fetch_data():
                 if col not in new_row:
                     new_row[col] = ""
 
-            if is_empty_sntrack_id(new_row.get('sntrack_id')):
-                continue
-
             # Add Status from Submissions table via SubmissionId
             submission_id = str(new_row.get('SubmissionId', '')) if new_row.get('SubmissionId') else ''
             new_row['Status'] = status_lookup.get(submission_id, '')
+
+            # Keep if has sntrack_id OR a non-empty Status
+            if is_empty_sntrack_id(new_row.get('sntrack_id')) and not new_row.get('Status'):
+                continue
+
+            final_data.append(convert_to_serializable(new_row))
 
             final_data.append(convert_to_serializable(new_row))
 
