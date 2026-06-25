@@ -461,12 +461,16 @@ def fetch_data():
             sql_cursor.execute(sql_query)
             sql_columns = [column[0] for column in sql_cursor.description]
 
+            sql_lookup = {}       # key → last row (used for Access merge)
+            sql_all_rows = []     # ALL rows preserved (used for SQL-only loop)
+
             for row in sql_cursor.fetchall():
                 row_dict = dict(zip(sql_columns, row))
                 key = str(row_dict['SnsNtcId'])
                 sql_lookup[key] = row_dict
+                sql_all_rows.append(row_dict)
 
-            logger.info(f"Fetched {len(sql_lookup)} records from SQL Server")
+            logger.info(f"Fetched {len(sql_all_rows)} records from SQL Server")
         else:
             logger.warning("Skipped SQL Server res908 (connection failed)")
     except Exception as e:
@@ -542,34 +546,36 @@ def fetch_data():
 
         final_data.append(convert_to_serializable(merged_row))
 
-    # Add records only in SQL Server (not in Access)
-    for sql_id, sql_row in sql_lookup.items():
-        if sql_id not in access_ids_seen:
-            new_row = sql_row.copy()
-            new_row['ntc_id'] = sql_id
+    # Add records only in SQL Server (not in Access).
+    # Iterate over ALL SQL rows (not deduplicated dict) so that records
+    # sharing the same SnsNtcId (e.g. placeholder value 1) are all preserved.
+    for sql_row in sql_all_rows:
+        sql_id = str(sql_row.get('SnsNtcId', ''))
+        if sql_id in access_ids_seen:
+            continue
+        new_row = sql_row.copy()
+        new_row['ntc_id'] = sql_id
 
-            if 'tgt_ntc_id' in new_row:
-                tgt_ntc_id = new_row['tgt_ntc_id']
-                if tgt_ntc_id in (0, '', None):
-                    new_row['tgt_ntc_id'] = ''
-            else:
+        if 'tgt_ntc_id' in new_row:
+            tgt_ntc_id = new_row['tgt_ntc_id']
+            if tgt_ntc_id in (0, '', None):
                 new_row['tgt_ntc_id'] = ''
+        else:
+            new_row['tgt_ntc_id'] = ''
 
-            for col in access_columns_list:
-                if col not in new_row:
-                    new_row[col] = ""
+        for col in access_columns_list:
+            if col not in new_row:
+                new_row[col] = ""
 
-            # Add Status from Submissions table via SubmissionId
-            submission_id = str(new_row.get('SubmissionId', '')) if new_row.get('SubmissionId') else ''
-            new_row['Status'] = status_lookup.get(submission_id, '')
+        # Add Status from Submissions table via SubmissionId
+        submission_id = str(new_row.get('SubmissionId', '')) if new_row.get('SubmissionId') else ''
+        new_row['Status'] = status_lookup.get(submission_id, '')
 
-            # Keep if has sntrack_id OR a non-empty Status
-            if is_empty_sntrack_id(new_row.get('sntrack_id')) and not new_row.get('Status'):
-                continue
+        # Keep if has sntrack_id OR a non-empty Status
+        if is_empty_sntrack_id(new_row.get('sntrack_id')) and not new_row.get('Status'):
+            continue
 
-            final_data.append(convert_to_serializable(new_row))
-
-            final_data.append(convert_to_serializable(new_row))
+        final_data.append(convert_to_serializable(new_row))
 
     # --- Merge ESIM Resolution classification ---
     esim_resolutions = fetch_esim_resolutions()
