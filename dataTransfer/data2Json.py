@@ -157,8 +157,12 @@ def fetch_and_export():
             if field not in merged_row:
                 merged_row[field] = ""
 
-        if is_empty_sntrack_id(merged_row.get('sntrack_id')):
-            continue
+        # Records from MS Access (sntrack) are always kept, even when they have
+        # no matching e-submission record / sntrack_id.
+        # sntrack-only records have no e-submission TypeOfSubmission; the source
+        # table (tblSpaceStnNotif) tracks space-station notices.
+        if not merged_row.get('TypeOfSubmission'):
+            merged_row['TypeOfSubmission'] = 'NotificationOfSpaceStation'
 
         final_data.append(merged_row)
 
@@ -176,6 +180,11 @@ def fetch_and_export():
 
             # mapping
             new_row['ntc_id'] = sql_id  # 填补 Notice ID
+
+            # This system tracks space-station notices only. Drop earth-station
+            # submissions (e-submission records not present in sntrack).
+            if str(new_row.get('TypeOfSubmission')) == 'NotificationOfEarthStation':
+                continue
 
             if 'tgt_ntc_id' in new_row:
                 tgt_ntc_id = new_row['tgt_ntc_id']

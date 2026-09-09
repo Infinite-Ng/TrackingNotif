@@ -796,14 +796,9 @@
                     dataType: 'json',
                     success: function(data) {
                         console.log('Data loaded:', data.length, 'records');
-                        // Filter out records with empty SNTrack ID
-                        var filteredData = data.filter(function(row) {
-                            return row.sntrack_id && row.sntrack_id.toString().trim() !== '';
-                        });
-                        console.log('After filtering empty SNTrack:', filteredData.length, 'records');
-                        allData = filteredData;
-                        populateADMFilter(filteredData);
-                        initTable(filteredData);
+                        allData = data;
+                        populateADMFilter(data);
+                        initTable(data);
                     },
                     error: function(xhr, status, error) {
                         console.error('Failed to load data:', status, error);
@@ -980,14 +975,10 @@
                     dataType: 'json',
                     cache: false, // Prevent caching
                     success: function(data) {
-                        // Filter out records with empty SNTrack ID
-                        var filteredData = data.filter(function(row) {
-                            return row.sntrack_id && row.sntrack_id.toString().trim() !== '';
-                        });
-                        allData = filteredData;
-                        table.clear().rows.add(filteredData).draw();
+                        allData = data;
+                        table.clear().rows.add(data).draw();
                         var now = new Date();
-                        $('#lastUpdated').text('Synced: ' + now.toLocaleTimeString() + ' (' + filteredData.length + ' records)');
+                        $('#lastUpdated').text('Synced: ' + now.toLocaleTimeString() + ' (' + data.length + ' records)');
                         btn.prop('disabled', false).html('<i class="fas fa-sync-alt"></i> Refresh');
                     },
                     error: function(xhr, status, error) {

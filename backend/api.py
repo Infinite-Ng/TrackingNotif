@@ -538,11 +538,14 @@ def fetch_data():
         submission_id = str(merged_row.get('SubmissionId', '')) if merged_row.get('SubmissionId') else ''
         merged_row['Status'] = status_lookup.get(submission_id, '')
 
-        # Keep records that have EITHER a valid sntrack_id OR a non-empty Status.
-        # Cases like "Submitted to BR" may not yet have an sntrack_id but should
-        # still appear in the tracking system via their e-submission Status.
-        if is_empty_sntrack_id(merged_row.get('sntrack_id')) and not merged_row.get('Status'):
-            continue
+        # Records from MS Access (sntrack) are always kept, even when they have
+        # no matching e-submission record (no sntrack_id / no Status), so that
+        # sntrack-only records remain visible in the tracking system.
+        # sntrack-only records have no e-submission TypeOfSubmission; the source
+        # table (tblSpaceStnNotif) tracks space-station notices, so label them
+        # accordingly for the frontend TypeOfSubmission filter.
+        if not merged_row.get('TypeOfSubmission'):
+            merged_row['TypeOfSubmission'] = 'NotificationOfSpaceStation'
 
         final_data.append(convert_to_serializable(merged_row))
 
@@ -555,6 +558,11 @@ def fetch_data():
             continue
         new_row = sql_row.copy()
         new_row['ntc_id'] = sql_id
+
+        # This system tracks space-station notices only. Drop earth-station
+        # submissions (e-submission records not present in sntrack).
+        if str(new_row.get('TypeOfSubmission')) == 'NotificationOfEarthStation':
+            continue
 
         if 'tgt_ntc_id' in new_row:
             tgt_ntc_id = new_row['tgt_ntc_id']
@@ -654,6 +662,20 @@ def _load_cache_from_disk():
     return False
 
 
+def _timestamp_age_seconds(iso_str):
+    """Return how many seconds ago the given ISO timestamp was.
+    Returns None if the timestamp is missing or cannot be parsed."""
+    if not iso_str:
+        return None
+    try:
+        ts = datetime.fromisoformat(str(iso_str).replace('Z', '+00:00'))
+    except (ValueError, AttributeError):
+        return None
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - ts).total_seconds()
+
+
 def _write_cache_files(cache_payload):
     """Persist the cache to disk locations used as an offline fallback by the
     Flask-served and IIS-served frontends. Best-effort; never raises."""
@@ -695,13 +717,14 @@ def _refresh_cache_once():
 
 
 def _background_refresher():
-    """Daemon loop: does NOT refresh on startup (cache loaded from disk).
-    Waits for the periodic timer OR an explicit /api/refresh request, then
-    runs one refresh cycle."""
+    """Daemon loop: refreshes every _REFRESH_INTERVAL seconds (default 10 min)
+    and also whenever /api/refresh is called. On startup, the module-level code
+    sets _refresh_now if the disk cache is older than 5 minutes, which triggers
+    an immediate refresh on the first loop iteration."""
     while True:
-        # Wait for the interval OR an explicit refresh request, whichever first.
-        # On the very first iteration this means the first auto-refresh happens
-        # after _REFRESH_INTERVAL seconds, not immediately at startup.
+        # Wait for the periodic timer OR an explicit refresh request, whichever
+        # comes first. A pre-set _refresh_now (stale cache at startup) makes
+        # this return immediately.
         _refresh_now.wait(timeout=_REFRESH_INTERVAL)
         _refresh_now.clear()
         try:
@@ -778,8 +801,9 @@ def serve_frontend(filename):
 
 
 # 1. Load the latest cached data from disk so /api/data responds instantly.
-# 2. Start the background refresher daemon — it waits for /api/refresh calls
-#    instead of auto-fetching on startup.
+# 2. Start the background refresher daemon.
+# 3. Startup freshness check: if the cached data is older than 5 minutes,
+#    trigger an immediate background refresh; otherwise keep serving the cache.
 _loaded = _load_cache_from_disk()
 if not _loaded:
     logger.warning("No disk cache found — /api/data will return 503 until "
@@ -789,6 +813,23 @@ _refresher_thread = threading.Thread(
     target=_background_refresher, name='cache-refresher', daemon=True
 )
 _refresher_thread.start()
+
+# Startup freshness window (5 minutes). If the cached data is older than this,
+# schedule an immediate refresh so users don't see stale data for 10 minutes.
+_STARTUP_FRESH_SECONDS = 300
+with _cache_lock:
+    _startup_generated_at = _cache['generated_at']
+_startup_age = _timestamp_age_seconds(_startup_generated_at)
+if not _loaded or _startup_age is None or _startup_age > _STARTUP_FRESH_SECONDS:
+    logger.info(
+        f"Disk cache is stale (age={_startup_age if _startup_age is not None else 'N/A'}s) "
+        "— scheduling immediate startup refresh."
+    )
+    _refresh_now.set()
+else:
+    logger.info(
+        f"Disk cache is fresh (age={_startup_age:.0f}s) — skipping startup refresh."
+    )
 
 
 if __name__ == '__main__':
