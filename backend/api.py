@@ -206,6 +206,134 @@ def _classify_single(e_srvcls, freq_min, freq_max, ntc_type):
     return result
 
 
+def _connect_srs():
+    """Open a READ-ONLY connection to the SRS Access database.
+    Only SELECT statements may ever be executed on this connection."""
+    conn_str = (
+        r'DRIVER={Microsoft Access Driver (*.mdb, *.accdb)};'
+        f'DBQ={_SRS_MDB_PATH};'
+        r'ReadOnly=1;'
+    )
+    return pyodbc.connect(conn_str, readonly=True)
+
+
+def _clean(value):
+    """Strip a DB value; NULL / blank becomes None."""
+    if value is None:
+        return None
+    value = str(value).strip()
+    return value or None
+
+
+def _summarize_coordination(rows):
+    """Summarize distinct (coord_prov, agree_st, coord_st, adm) rows of provn or
+    tr_aff_ntw, following Wu's coord_st statistics definitions (e-mail 2026-02-24).
+
+    Administrations are de-duplicated: an adm appearing on many rows counts once.
+      agree_st          {symbol: [adm, ...]}  count = len(list); 'O' = Excel J/L
+      coord_st          {symbol: [adm, ...]}  'O' = Excel K/O
+      coord_st_details  {coord_st symbol: {agree_st symbol: [adm, ...]}}
+                        ['O'] = Excel N coord_st_o_details
+      coord_prov_values sorted distinct coord_prov (Excel M / Q)
+    A symbol whose rows all have a NULL adm is kept with an empty list (count 0).
+    """
+    agree, coord, details, provs = {}, {}, {}, set()
+    for coord_prov, agree_st, coord_st, adm in rows:
+        coord_prov, agree_st, coord_st, adm = map(_clean, (coord_prov, agree_st, coord_st, adm))
+        if coord_prov:
+            provs.add(coord_prov)
+        if agree_st:
+            adms = agree.setdefault(agree_st, set())
+            if adm:
+                adms.add(adm)
+        if coord_st:
+            adms = coord.setdefault(coord_st, set())
+            if adm:
+                adms.add(adm)
+            sub = details.setdefault(coord_st, {}).setdefault(agree_st or '', set())
+            if adm:
+                sub.add(adm)
+
+    def as_lists(d):
+        return {k: sorted(v) for k, v in sorted(d.items())}
+
+    return {
+        'has_data': bool(rows),
+        'coord_prov_values': sorted(provs),
+        'agree_st': as_lists(agree),
+        'coord_st': as_lists(coord),
+        'coord_st_details': {k: as_lists(v) for k, v in sorted(details.items())},
+    }
+
+
+def fetch_notice_details(ntc_id):
+    """Query SRS (read-only, SELECT only) for the detail popup of one notice.
+
+    Table links (verified against srs_all.mdb):
+      notice          -> ntc_id
+      provn           -> grp_id -> grp.ntc_id
+      tr_aff_ntw      -> ntc_id
+      coord_agree_ntw -> ntc_id
+      all_aff_ntw     -> aff_rec_id -> grp_aff_rec.grp_id -> grp.ntc_id
+    Returns None for every field when the notice is not in SRS.
+    """
+    details = {
+        'in_srs': False,
+        'prov': None,
+        'ntf_occurs': None,
+        'prov_desc': None,
+        'provn': None,
+        'tr_aff_ntw': None,
+        'coord_agree_ntw_count': None,
+        'all_aff_ntw_count': None,
+    }
+    srs_conn = _connect_srs()
+    try:
+        cursor = srs_conn.cursor()
+        cursor.execute(
+            "SELECT prov, ntf_occurs, prov_desc FROM [notice] WHERE ntc_id = ?", ntc_id)
+        row = cursor.fetchone()
+        if row is None:
+            return details
+        details['in_srs'] = True
+        details['prov'], details['ntf_occurs'], details['prov_desc'] = row[0], row[1], row[2]
+
+        cursor.execute("""
+            SELECT DISTINCT p.coord_prov, p.agree_st, p.coord_st, p.adm
+            FROM [provn] AS p INNER JOIN [grp] AS g ON p.grp_id = g.grp_id
+            WHERE g.ntc_id = ?
+        """, ntc_id)
+        details['provn'] = _summarize_coordination(cursor.fetchall())
+
+        # tr_aff_ntw is often empty (cleared after the coordination wizard runs).
+        cursor.execute("""
+            SELECT DISTINCT coord_prov, agree_st, coord_st, adm
+            FROM [tr_aff_ntw]
+            WHERE ntc_id = ?
+        """, ntc_id)
+        details['tr_aff_ntw'] = _summarize_coordination(cursor.fetchall())
+
+        # No primary key on coord_agree_ntw: plain row count, no de-duplication.
+        cursor.execute("SELECT COUNT(*) FROM [coord_agree_ntw] WHERE ntc_id = ?", ntc_id)
+        details['coord_agree_ntw_count'] = cursor.fetchone()[0]
+
+        # One all_aff_ntw record can be linked to several groups of the same
+        # notice, so count distinct aff_rec_id (Access has no COUNT(DISTINCT)).
+        cursor.execute("""
+            SELECT COUNT(*) FROM (
+                SELECT DISTINCT a.aff_rec_id
+                FROM ([all_aff_ntw] AS a
+                      INNER JOIN [grp_aff_rec] AS r ON a.aff_rec_id = r.aff_rec_id)
+                      INNER JOIN [grp] AS g ON r.grp_id = g.grp_id
+                WHERE g.ntc_id = ?
+            ) AS x
+        """, ntc_id)
+        details['all_aff_ntw_count'] = cursor.fetchone()[0]
+    finally:
+        srs_conn.close()
+    return details
+
+
 def fetch_esim_resolutions():
     """Query SRS database and classify each ntc_id for RES156/RES169/RES123.
 
@@ -219,12 +347,7 @@ def fetch_esim_resolutions():
             logger.warning(f"SRS database not found at {_SRS_MDB_PATH}; skipping ESIM classification.")
             return result
         
-        conn_str = (
-            r'DRIVER={Microsoft Access Driver (*.mdb, *.accdb)};'
-            f'DBQ={_SRS_MDB_PATH};'
-            r'ReadOnly=1;'
-        )
-        srs_conn = pyodbc.connect(conn_str)
+        srs_conn = _connect_srs()
         logger.info(f"Connected to SRS database: {_SRS_MDB_PATH}")
 
         # Step 1: Get ESIM groups with their class, frequency, and ntc_id
@@ -776,6 +899,22 @@ def refresh_data():
         'message': 'Refresh scheduled.',
         'current_timestamp': generated_at
     }), 202
+
+
+@app.route('/api/details/<ntc_id>', methods=['GET'])
+@rate_limit
+def get_notice_details(ntc_id):
+    """Extra SRS fields for one notice (used by the row-click popup)."""
+    if not ntc_id.isdigit():
+        return jsonify({'success': False, 'error': 'ntc_id must be numeric'}), 400
+    if not os.path.exists(_SRS_MDB_PATH):
+        return jsonify({'success': False, 'error': 'SRS database not reachable'}), 503
+    try:
+        details = fetch_notice_details(int(ntc_id))
+    except Exception as e:
+        logger.error(f"Error fetching SRS details for ntc_id={ntc_id}: {e}")
+        return jsonify({'success': False, 'error': 'Failed to query SRS database'}), 500
+    return jsonify({'success': True, 'ntc_id': ntc_id, 'details': details})
 
 
 @app.route('/api/health', methods=['GET'])

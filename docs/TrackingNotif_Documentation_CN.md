@@ -101,6 +101,66 @@ Flask 后端（api.py）
 
 页面顶部的列芯片按钮用于显示/隐藏各列。调整后点击 **Apply（应用）** 生效。列设置会保存在浏览器 `localStorage` 中，下次访问自动还原。点击旁边的 **Reset（重置）** 可清除已保存的设置并恢复默认列。
 
+### 4.8 行详情弹窗（`index_zhiruo.html`）
+
+点击表格中任意一行，弹出该 notice 的详情窗口，字段按**数据来源**分三组显示（见第 5A 节）。SRS 部分由后端接口 `/api/details/<ntc_id>` 实时查询。空值照常显示字段名、值留空；notice 不在 SRS 中时显示 "Notice not found in SRS database."（新提交、尚未处理的 notice 属于这种情况）。
+
+---
+
+## 5A. 字段来源与 SRS 统计规则
+
+### 三个数据库
+
+| 来源 | 位置 | 关联字段 |
+|------|------|---------|
+| SNTrack | MS Access `sntrdat.mdb`，表 `tblSpaceStnNotif` | `ntc_id` |
+| e-submission | SQL Server `SpaceNetworkSystem`：`res908.Res908`；Status 来自 `dbo.Submissions` + `dbo.SubmissionsStatus`（经 `SubmissionId`） | `SnsNtcId` = `ntc_id` |
+| SRS | MS Access `\\blue\dfs\br\BR_DATA\SPACE\SRS_DB\srs_all.mdb`（只读连接，仅执行 SELECT） | `ntc_id` |
+
+- **SNTrack 字段：** BRREG、2d_date、ADM、PHASE、tgt_ntc_id、11.32A、11.41、subtoc、SUP、d_val_in、d_check_in、d_spr_out、d_complete、d_wmeeting、CIRC/pub、CIRC2/pub2、CIRC3/pub3、remarks、tex_remarks
+- **e-submission 字段：** DateOfReceive、SatName、long_nom、ntwk_org、act_code、TypeOfSubmission、Status、SNTrack ID（sntrack_id）、SubmissionId、InternalReference、DocumentumReference
+  - 只存在于 SNTrack、没有 e-submission 记录的行，TypeOfSubmission 由后端默认填为 NotificationOfSpaceStation。
+- **SRS 字段：** Res156/169/123（由 `e_srvcls`、`grp`、`notice` 计算）以及弹窗中的 SRS 部分。
+- BRREG（SNTrack）与 DateOfReceive（e-submission）含义相同，但在提交被退回等情况下可能不同。
+
+### SRS 表的关联方式
+
+| 表 | 关联到 notice 的方式 |
+|----|---------------------|
+| `notice` | `ntc_id` |
+| `provn` | `grp_id` → `grp.ntc_id`（provn 没有 ntc_id 列） |
+| `tr_aff_ntw` | `ntc_id` |
+| `coord_agree_ntw` | `ntc_id` |
+| `all_aff_ntw` | `aff_rec_id` → `grp_aff_rec.grp_id` → `grp.ntc_id`（待确认） |
+
+### 统计规则（依据 Wu 2026-02-24 邮件 "The coord_st statistics result"）
+
+`provn` 和 `tr_aff_ntw` 规则相同。凡是"数主管部门"，都按 `adm` **去重**（同一 adm 出现多行只算 1 个），`adm` 为空的行不计入。
+
+| 弹窗字段 | 含义 | 对应 Excel 列 |
+|---------|------|--------------|
+| agree_st | 每种符号下的不同 adm 数量及列表 | O 符号 = J `agree_st_o_count` / L `agree_st_o_adm_list` |
+| coord_st | 每种符号下的不同 adm 数量及列表 | O 符号 = K `coord_st_o_count` / O `coord_st_o_adm_list` |
+| coord_st details | 按 coord_st 符号，再按 agree_st 值分组的 adm 列表 | O 符号 = N `coord_st_o_details` |
+| coord_prov | coord_prov 去重后的集合 | provn = M `coord_prov_values`；tr_aff_ntw = Q `tr_aff_ntw_coord_prov` |
+| has data（仅 tr_aff_ntw） | 该 notice 在表中是否有记录 | P `info in tr_aff_ntw_data` |
+| coord_agree_ntw | 行数（该表无主键，不去重） | — |
+
+`tr_aff_ntw` 经 coordination wizard 处理后会被清空，大部分 notice 没有数据属于正常情况。
+
+### 与参考 Excel 比对
+
+`tools/compare_coord_stats.py` 用 Excel 中的 ntc_id 逐条比对 J–Q 列（只读）：
+
+```
+tracking_env_32\python.exe tools\compare_coord_stats.py coord_st_statistics_part1.xlsx result.csv
+tracking_env_32\python.exe tools\compare_coord_stats.py coord_st_statistics_part1.xlsx result.csv --source-mdb
+```
+
+- 不加参数：查询 `srs_all.mdb`（弹窗实际使用的数据）。
+- `--source-mdb`：改为读取 Excel `mdb_file` 列中各主管部门提交的 MDB，即 Excel 本身的数据来源，用于单独验证统计逻辑。
+- 两者会有差异：BR 处理后写入 SRS 的数据与提交的 MDB 不同（例如提交时 coord_st = 'O' 的 adm，在 SRS 中变成 agree_st = 'O'；coord_prov 前缀 `X/` 变为 `11.41/`；tr_aff_ntw 被清空）。
+
 ---
 
 ## 5. 提交类型（TypeOfSubmission）对照表

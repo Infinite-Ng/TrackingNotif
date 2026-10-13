@@ -1,0 +1,2715 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ITU Notice Tracking System</title>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css" rel="stylesheet">
+
+    <style>
+        :root {
+            --itu-blue: #009CD5;
+            --itu-blue-light: rgba(0, 153, 214, 0.1);
+            --itu-blue-hover: #0081b5;
+            --border-color: #ced4da;
+            --placeholder-gray: #999;
+            --header-bg: #f8f9fa;
+        }
+
+        body {
+            background-color: white;
+            font-family: 'Segoe UI', sans-serif;
+            padding: 0;
+            margin: 0;
+            font-size: 0.9rem;
+        }
+
+        /* --- Header Area --- */
+        .header-area {
+            width: 100%;
+            background-color: #f8f9fa;
+            border-bottom: 4px solid var(--itu-blue);
+            padding: 15px 30px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        .header-title {
+            font-size: 1.6rem;
+            color: #2c3e50;
+            font-weight: 500;
+        }
+        .header-logo {
+            height: 55px;
+            object-fit: contain;
+        }
+
+        .container-fluid-custom {
+            padding: 0 30px;
+        }
+
+        /* === 1. Column Selector === */
+        .column-selector-area {
+            margin-bottom: 25px;
+        }
+        .col-btn-group {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        .col-checkbox-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .col-chip {
+            display: inline-flex;
+            align-items: center;
+            padding: 5px 10px;
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            color: #495057;
+            transition: all 0.2s;
+        }
+        .col-chip input {
+            display: none;
+        }
+        .col-chip i {
+            margin-right: 8px;
+            font-size: 1rem;
+            color: #ced4da;
+        }
+        .col-chip.active {
+            background-color: #f8f9fa;
+            border-color: #dee2e6;
+        }
+        .col-chip.active i {
+            color: var(--itu-blue);
+        }
+
+        /* === 2. Filter Row === */
+        .filter-row {
+            display: flex;
+            align-items: flex-end;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .left-filters {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            flex-grow: 1;
+        }
+        .filter-group-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            width: 100%;
+        }
+
+        .form-select-custom, .form-control-custom, .date-range-container {
+            height: 38px !important;
+            border: 1px solid var(--border-color) !important;
+            border-radius: 4px !important;
+            font-size: 0.9rem;
+            background-color: white;
+            color: var(--placeholder-gray);
+        }
+
+        .form-select-custom {
+            flex: 1 1 120px;
+            text-align: center;
+        }
+        .form-control-custom {
+            flex: 1 1 120px;
+            text-align: center;
+            color: #212529;
+            padding: 0 10px;
+        }
+        .form-control-custom::placeholder {
+            text-align: center;
+        }
+
+        .date-range-container {
+            flex: 2 1 320px;
+            display: flex;
+            align-items: center;
+            overflow: hidden;
+        }
+        .date-label-static {
+            padding: 0 10px;
+            color: var(--placeholder-gray);
+            border-right: 1px solid var(--border-color);
+            white-space: nowrap;
+        }
+        .date-input-wrapper {
+            flex: 1;
+            height: 100%;
+        }
+        .date-input-wrapper input {
+            border: none;
+            outline: none;
+            width: 100%;
+            height: 100%;
+            text-align: center;
+            font-size: 0.85rem;
+            color: var(--placeholder-gray) !important;
+            background: transparent;
+        }
+
+        .form-select-custom.has-value,
+        .date-input-wrapper input.has-value,
+        .form-control-custom {
+            color: #212529 !important;
+        }
+
+        .form-select-custom option {
+            color: #212529;
+            background-color: white;
+        }
+
+        /* === 3. Right Actions === */
+        .right-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            min-width: 350px;
+            margin-top: 0;
+        }
+        .search-container {
+            position: relative;
+            height: 38px;
+            width: 100%;
+            display: flex;
+        }
+
+        /* ITU Blue Buttons */
+        .btn-custom-blue {
+            background-color: var(--itu-blue) !important;
+            color: white !important;
+            border: none !important;
+            height: 38px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .btn-custom-blue:hover {
+            background-color: var(--itu-blue-hover) !important;
+        }
+
+        .search-btn {
+            position: absolute;
+            right: 0;
+            top: 0;
+            height: 38px;
+            width: 38px;
+            background: var(--itu-blue) !important;
+            color: white !important;
+            border: 1px solid var(--itu-blue) !important;
+            border-radius: 0 4px 4px 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .search-btn:hover {
+            background-color: var(--itu-blue-hover) !important;
+        }
+
+        #searchInput {
+            width: 100%;
+            padding-left: 10px;
+            color: #212529;
+        }
+
+        /* Pagination ITU Blue */
+        .page-item.active .page-link {
+            background-color: var(--itu-blue) !important;
+            border-color: var(--itu-blue) !important;
+            color: white !important;
+        }
+        .page-link {
+            color: var(--itu-blue) !important;
+        }
+
+        /* Table Styles */
+        table.dataTable {
+            width: 100% !important;
+            margin: 0 auto;
+            font-size: 0.75rem;
+            border-collapse: collapse !important;
+            table-layout: auto;
+        }
+
+        table.dataTable thead th {
+            background-color: var(--header-bg);
+            color: #495057;
+            font-weight: 600;
+            padding: 4px 4px !important;
+            border-bottom: 1px solid #dee2e6 !important;
+            vertical-align: middle;
+            white-space: nowrap;
+            text-align: center !important;
+            font-size: 0.7rem;
+        }
+
+        table.dataTable tbody td {
+            padding: 4px 5px !important;
+            vertical-align: middle;
+            white-space: nowrap;
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            border-bottom: 1px solid #dee2e6;
+            text-align: center !important;
+        }
+
+        table.dataTable tbody td:hover {
+            white-space: normal;
+            position: relative;
+            z-index: 10;
+            background-color: #fff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+
+        .dataTables_scrollHead {
+            margin-bottom: 0 !important;
+        }
+
+        .dataTables_scrollBody {
+            border-top: none !important;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        /* Table responsive wrapper */
+        .table-responsive {
+            max-height: 65vh;
+            overflow: auto;
+        }
+        
+        /* Sticky header */
+        #ituTable thead {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background-color: var(--header-bg);
+        }
+        
+        #ituTable thead .header-row th {
+            background-color: var(--header-bg);
+            border-bottom: 2px solid var(--itu-blue);
+        }
+        
+        #ituTable thead .column-filter-row th {
+            background-color: #fff;
+        }
+
+        .pagination {
+            --bs-pagination-padding-x: 0.5rem;
+            --bs-pagination-padding-y: 0.25rem;
+            --bs-pagination-font-size: 0.75rem;
+            margin-top: 10px;
+        }
+
+        #lastUpdated {
+            font-size: 0.85rem;
+            color: #6c757d;
+        }
+
+        /* === Column Filter Inputs === */
+        .column-filter-row th {
+            padding: 2px 2px !important;
+            background-color: #f8f9fa;
+        }
+
+        .column-filter {
+            width: 100%;
+            height: 24px;
+            padding: 2px 4px;
+            border: 1px solid #dee2e6;
+            border-radius: 3px;
+            font-size: 0.7rem;
+            box-sizing: border-box;
+        }
+
+        .column-filter:focus {
+            border-color: var(--itu-blue);
+            outline: none;
+        }
+
+        .column-filter-date {
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+        }
+
+        .column-filter-date input {
+            width: 85px;
+            height: 20px;
+            padding: 1px 2px;
+            border: 1px solid #dee2e6;
+            border-radius: 3px;
+            font-size: 0.6rem;
+        }
+
+        .column-filter-date input:focus {
+            border-color: var(--itu-blue);
+            outline: none;
+        }
+
+        /* Loading overlay */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+
+        .loading-overlay.hidden {
+            display: none;
+        }
+
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--itu-blue);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            margin-top: 15px;
+            color: #495057;
+            font-size: 1rem;
+        }
+
+        /* API status indicator */
+        .api-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 0.8rem;
+            margin-left: 15px;
+        }
+
+        .api-status .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #6c757d;
+        }
+
+        .api-status.connected .status-dot {
+            background-color: #28a745;
+        }
+
+        .api-status.error .status-dot {
+            background-color: #dc3545;
+        }
+
+        /* === Dev Mode Toggle === */
+        .dev-mode-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-left: auto;
+            font-size: 0.78rem;
+            color: #6c757d;
+            user-select: none;
+        }
+        .dev-mode-toggle .toggle-switch {
+            position: relative;
+            width: 38px;
+            height: 20px;
+            flex-shrink: 0;
+        }
+        .dev-mode-toggle .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .dev-mode-toggle .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #ccc;
+            border-radius: 20px;
+            transition: 0.25s;
+        }
+        .dev-mode-toggle .toggle-slider::before {
+            content: "";
+            position: absolute;
+            height: 14px;
+            width: 14px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            border-radius: 50%;
+            transition: 0.25s;
+        }
+        .dev-mode-toggle input:checked + .toggle-slider {
+            background-color: var(--itu-blue);
+        }
+        .dev-mode-toggle input:checked + .toggle-slider::before {
+            transform: translateX(18px);
+        }
+        .dev-only {
+            display: none;
+        }
+        body.dev-mode .dev-only {
+            display: flex;
+        }
+        body.dev-mode #certTrustBanner.dev-only.active {
+            display: block;
+        }
+
+        /* ===== Multi-select dropdown (in-table column header) ===== */
+        .multi-select-dropdown {
+            position: relative;
+            display: inline-block;
+            width: 100%;
+        }
+
+        .multi-select-btn {
+            width: 100%;
+            height: 24px;
+            padding: 2px 4px;
+            border: 1px solid #dee2e6;
+            border-radius: 3px;
+            font-size: 0.65rem;
+            background: white;
+            cursor: pointer;
+            text-align: left;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .multi-select-btn:hover {
+            border-color: var(--itu-blue);
+        }
+
+        .multi-select-menu {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            z-index: 1050;
+            min-width: 160px;
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            padding: 4px 0;
+            max-height: 220px;
+            overflow-y: auto;
+        }
+
+        .multi-select-menu.show {
+            display: block;
+        }
+
+        .multi-select-item {
+            display: flex;
+            align-items: center;
+            padding: 4px 8px;
+            cursor: pointer;
+            font-size: 0.7rem;
+            user-select: none;
+        }
+
+        .multi-select-item:hover {
+            background-color: var(--itu-blue-light);
+        }
+
+        .multi-select-item input {
+            margin-right: 6px;
+            flex-shrink: 0;
+        }
+
+        .multi-select-item.selected {
+            background-color: var(--itu-blue-light);
+        }
+
+        /* ===== Chip-style TypeOfSubmission filter (top filter bar) ===== */
+        .chip-multiselect-wrapper {
+            position: relative;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .chip-multiselect-box {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 28px 4px 8px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            background: white;
+            cursor: pointer;
+            min-height: 38px;
+            position: relative;
+            transition: border-color 0.15s;
+        }
+
+        .chip-multiselect-box:hover,
+        .chip-multiselect-box.open {
+            border-color: var(--itu-blue);
+        }
+
+        .chip-tag {
+            display: inline-flex;
+            align-items: center;
+            background: #e9ecef;
+            border: 1px solid #ced4da;
+            border-radius: 3px;
+            padding: 2px 4px 2px 7px;
+            font-size: 0.78rem;
+            color: #333;
+            gap: 4px;
+            white-space: nowrap;
+        }
+
+        .chip-tag-remove {
+            cursor: pointer;
+            color: #6c757d;
+            font-size: 0.75rem;
+            line-height: 1;
+            padding: 0 2px;
+            border-radius: 2px;
+            border: none;
+            background: none;
+        }
+
+        .chip-tag-remove:hover {
+            background: #c9303040;
+            color: #c93030;
+        }
+
+        .chip-clear-all {
+            position: absolute;
+            right: 6px;
+            top: 50%;
+            transform: translateY(-50%);
+            cursor: pointer;
+            color: #aaa;
+            font-size: 0.85rem;
+            line-height: 1;
+            padding: 2px 3px;
+            border-radius: 2px;
+            background: none;
+            border: none;
+            display: none;
+        }
+
+        .chip-clear-all:hover {
+            color: #666;
+        }
+
+        .chip-multiselect-box.has-chips .chip-clear-all {
+            display: block;
+        }
+
+        .chip-multiselect-placeholder {
+            color: var(--placeholder-gray);
+            font-size: 0.9rem;
+            pointer-events: none;
+        }
+
+        .chip-dropdown-menu {
+            display: none;
+            position: absolute;
+            top: calc(100% + 2px);
+            left: 0;
+            right: 0;
+            z-index: 1060;
+            background: white;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+            padding: 4px 0;
+            max-height: 260px;
+            overflow-y: auto;
+        }
+
+        .chip-dropdown-menu.show {
+            display: block;
+        }
+
+        .chip-dropdown-item {
+            display: flex;
+            align-items: center;
+            padding: 6px 12px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            user-select: none;
+            gap: 8px;
+        }
+
+        .chip-dropdown-item:hover {
+            background-color: var(--itu-blue-light);
+        }
+
+        .chip-dropdown-item.selected {
+            background-color: var(--itu-blue-light);
+        }
+
+        .chip-dropdown-item input[type="checkbox"] {
+            width: 14px;
+            height: 14px;
+            flex-shrink: 0;
+            accent-color: var(--itu-blue);
+            cursor: pointer;
+        }
+
+        .chip-dropdown-divider {
+            padding: 5px 12px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            color: var(--itu-blue);
+            border-bottom: 1px solid #dee2e6;
+            cursor: pointer;
+        }
+
+        .chip-dropdown-divider:hover {
+            background: var(--itu-blue-light);
+        }
+
+        /* --- Row details popup (SRS extra fields) --- */
+        #ituTable tbody tr {
+            cursor: pointer;
+        }
+
+        #detailsModal .modal-header {
+            border-bottom: 3px solid var(--itu-blue);
+            padding: 10px 16px;
+        }
+
+        #detailsModal .modal-title {
+            font-size: 1rem;
+            font-weight: 600;
+        }
+
+        #detailsModal table {
+            width: 100%;
+            font-size: 0.82rem;
+            margin: 0;
+        }
+
+        #detailsModal th {
+            width: 45%;
+            color: #495057;
+            font-weight: 600;
+            padding: 4px 8px;
+            vertical-align: top;
+        }
+
+        #detailsModal td {
+            padding: 4px 8px;
+            word-break: break-word;
+        }
+
+        #detailsModal .details-section th {
+            background: var(--header-bg);
+            color: var(--itu-blue);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            padding-top: 8px;
+        }
+
+        .details-sym {
+            display: inline-block;
+            background: var(--itu-blue-light);
+            border-radius: 3px;
+            padding: 0 6px;
+            margin: 1px 4px 1px 0;
+            white-space: nowrap;
+        }
+
+        .details-source {
+            float: right;
+            color: #6c757d;
+            font-weight: 400;
+            text-transform: none;
+            letter-spacing: 0;
+        }
+
+        .details-count {
+            display: inline-block;
+            min-width: 48px;
+            color: #495057;
+            font-weight: 600;
+        }
+
+        .details-adms {
+            color: #495057;
+        }
+
+        .details-sub {
+            margin-left: 24px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Certificate Trust Banner (only visible in Dev Mode) -->
+    <div id="certTrustBanner" class="dev-only" style="background:#fff3cd; border-bottom:2px solid #ffc107; padding:10px 24px; font-size:0.9rem; z-index:9999; position:relative;">
+        <strong><i class="fas fa-exclamation-triangle" style="color:#e67e00;"></i> Action required – trust the API certificate:</strong>
+        &nbsp;Open <a href="https://156.106.168.185:5001/api/health" target="_blank" style="color:#0070c0;font-weight:600;">https://156.106.168.185:5001/api/health</a>
+        in this browser, click <em>Advanced &rarr; Proceed</em>, then <a href="javascript:location.reload()" style="color:#0070c0;font-weight:600;">reload this page</a>.
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Loading data from server...</div>
+    </div>
+
+    <div class="header-area">
+        <img src="./logo-itu-slogan.svg" class="header-logo" alt="ITU Logo">
+        <div class="header-title">Notice Tracking</div>
+        <div id="apiStatus" class="api-status dev-only">
+            <span class="status-dot"></span>
+            <span class="status-text">Connecting...</span>
+        </div>
+        <div class="dev-mode-toggle">
+            <label class="toggle-switch">
+                <input type="checkbox" id="devModeCheckbox">
+                <span class="toggle-slider"></span>
+            </label>
+            <span>Dev Mode</span>
+        </div>
+    </div>
+
+    <div class="container-fluid-custom">
+        <!-- Column Selector Area -->
+        <div class="column-selector-area">
+            <div class="col-btn-group">
+                <button class="btn btn-sm btn-outline-secondary" id="selectAllColumns">All</button>
+                <button class="btn btn-sm btn-outline-secondary" id="deselectAllColumns">None</button>
+                <button class="btn btn-sm btn-custom-blue" id="applyColumnSettings" style="height:31px; flex:none; width:80px; padding:0;">Apply</button>
+                <button class="btn btn-sm btn-outline-danger" id="resetColumnSettings" style="height:31px; flex:none; padding:0 10px; margin-left:10px;" title="Clear saved column settings">Reset</button>
+            </div>
+            <div id="columnChipsContainer" class="col-checkbox-container"></div>
+        </div>
+
+        <!-- Filter Row -->
+        <div class="filter-row">
+            <div class="left-filters">
+                <div class="w-100 d-flex justify-content-between align-items-center">
+                    <h5 class="m-0" style="color:#495057; font-weight:600;">Data Preview</h5>
+                    <span id="lastUpdated"></span>
+                </div>
+
+                <div class="filter-group-row">
+                    <!-- Chip-style TypeOfSubmission multi-select -->
+                    <div class="chip-multiselect-wrapper">
+                        <div class="chip-multiselect-box" id="chipTypeBox">
+                            <span class="chip-multiselect-placeholder" id="chipTypePlaceholder" style="display:none;">Type of Submission: All</span>
+                            <button class="chip-clear-all" id="chipTypeClearAll" title="Clear all" tabindex="-1">&#10005;</button>
+                        </div>
+                        <div class="chip-dropdown-menu" id="chipTypeDropdown">
+                            <div class="chip-dropdown-divider" id="chipTypeToggleAll">&#9745; Select All / Deselect All</div>
+                        </div>
+                    </div>
+                    <!-- Chip-style Status multi-select -->
+                    <div class="chip-multiselect-wrapper" id="chipStatusWrapper">
+                        <div class="chip-multiselect-box" id="chipStatusBox">
+                            <span class="chip-multiselect-placeholder" id="chipStatusPlaceholder">Status: All</span>
+                            <button class="chip-clear-all" id="chipStatusClearAll" title="Clear all" tabindex="-1">&#10005;</button>
+                        </div>
+                        <div class="chip-dropdown-menu" id="chipStatusDropdown">
+                            <div class="chip-dropdown-divider" id="chipStatusToggleAll">&#9745; Select All / Deselect All</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="filter-group-row">
+                    <div class="date-range-container">
+                        <div class="date-label-static">BRReg</div>
+                        <div class="date-input-wrapper"><input type="text" class="js-date" id="filter_brreg_start" placeholder="From dd.mm.yyyy" onchange="handleDateColor(this)"></div>
+                        <div style="width:1px; background:#ced4da; height:60%;"></div>
+                        <div class="date-input-wrapper"><input type="text" class="js-date" id="filter_brreg_end" placeholder="To dd.mm.yyyy" onchange="handleDateColor(this)"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="right-actions">
+                <div class="d-flex gap-2 w-100">
+                    <button class="btn btn-custom-blue btn-sm" id="refreshBtn"><i class="fas fa-sync-alt"></i> Refresh</button>
+                    <button class="btn btn-custom-blue btn-sm" id="resetBtn"><i class="fas fa-undo"></i> Reset</button>
+                    <button class="btn btn-custom-blue btn-sm" id="downloadBtn"><i class="fas fa-file-excel"></i> Export</button>
+                </div>
+                <div class="search-container">
+                    <input type="text" id="searchInput" class="form-control-custom" placeholder="Search">
+                    <button class="search-btn"><i class="fas fa-search"></i></button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Data Table -->
+        <div class="bg-white border-top pt-2">
+            <div class="table-responsive">
+                <table id="ituTable" class="table table-hover w-100">
+                    <thead>
+                        <tr class="header-row">
+                            <th>SNTrack ID</th>
+                            <th>ADM</th>
+                            <th>ntwk_org</th>
+                            <th>SatName</th>
+                            <th>long_nom</th>
+                            <th>BRReg</th>
+                            <th>DateOfReceive</th>
+                            <th>Notice ID</th>
+                            <th>act_code</th>
+                            <th>tgt_ntc_id</th>
+                            <th>TypeOfSubmission</th>
+                            <th>Status</th>
+                            <th>PHASE</th>
+                            <th>11.32A</th>
+                            <th>11.41</th>
+                            <th>subtoc</th>
+                            <th>d_check_in</th>
+                            <th>d_spr_out</th>
+                            <th>CIRC</th>
+                            <th>pub</th>
+                            <th>CIRC2</th>
+                            <th>pub2</th>
+                            <th>CIRC3</th>
+                            <th>pub3</th>
+                            <th>SUP</th>
+                            <th>remarks</th>
+                            <th>InternalReference</th>
+                            <th>Res156</th>
+                            <th>Res169</th>
+                            <th>Res123</th>
+                        </tr>
+                        <tr class="column-filter-row">
+                            <th></th><th></th><th></th><th></th><th></th><th></th>
+                            <th></th><th></th><th></th><th></th><th></th><th></th>
+                            <th></th><th></th><th></th><th></th><th></th><th></th>
+                            <th></th><th></th><th></th><th></th><th></th><th></th>
+                            <th></th><th></th><th></th><th></th><th></th><th></th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Row details popup -->
+    <div class="modal fade" id="detailsModal" tabindex="-1" aria-labelledby="detailsModalTitle" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="detailsModalTitle">Notice details</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-2" id="detailsModalBody"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
+
+    <script>
+        // ==========================================
+        // API Configuration
+        // ==========================================
+        // When served from Flask on port 5001, use same origin.
+        // When opened from a file share / IIS (any other origin), fall back to the hardcoded backend URL.
+        const BACKEND_URL = 'https://156.106.168.185:5001';
+        const API_BASE_URL = (window.location.port === '5001') ? window.location.origin : BACKEND_URL;
+        const API_DATA_ENDPOINT = API_BASE_URL + '/api/data';
+        const API_HEALTH_ENDPOINT = API_BASE_URL + '/api/health';
+
+        // TypeOfSubmission mapping: full name -> short display name
+        const typeOfSubmissionMap = {
+            'NotificationOfSpaceStation': 'NotifSS',
+            'Resubmission': 'ResubSS',
+            'APINotSubjectToCoordination': 'API',
+            'CoordinationRequest': 'CR',
+            'AdvancePublicationInformation': 'API-Info',
+            'DueDiligenceInformation': 'DDI',
+            'NotificationUnderResolution49': 'Res49',
+            'Suppression': 'Sup',
+            'Modification': 'Mod'
+        };
+
+        // Get short name for TypeOfSubmission
+        function getTypeShortName(fullName) {
+            return typeOfSubmissionMap[fullName] || fullName || '';
+        }
+
+        // Default selected TypeOfSubmission values
+        const defaultSelectedTypes = ['NotificationOfSpaceStation', 'Resubmission'];
+
+        // Current selected TypeOfSubmission values (will be set after data loads)
+        let selectedTypeOfSubmissions = [...defaultSelectedTypes];
+        // All available TypeOfSubmission values (populated from data)
+        let allTypeOfSubmissions = [];
+
+        // Selected ADM values (default: all selected, will be populated after data loads)
+        let selectedADMs = [];
+        let allADMs = [];
+
+        // Selected SUP values (default: all selected, will be populated after data loads)
+        let selectedSUPs = [];
+        let allSUPs = [];
+
+        // Selected Status values (default: all selected, will be populated after data loads)
+        let selectedStatuses = [];
+        let allStatuses = [];
+
+        // All dates are shown as dd.mm.yyyy (e.g. 07.10.2026).
+        // Sorting and filtering always use the raw ISO value (yyyy-mm-dd...).
+        function formatDateDMY(data) {
+            if (!data) return '';
+            var dateStr = String(data).substring(0, 10);
+            var parts = dateStr.split('-');
+            if (parts.length === 3) {
+                return parts[2] + '.' + parts[1] + '.' + parts[0];
+            }
+            return dateStr;
+        }
+
+        // Date + time as dd.mm.yyyy HH:MM:SS (local time)
+        function formatDateTimeDMY(date) {
+            var pad = function(n) { return String(n).padStart(2, '0'); };
+            return pad(date.getDate()) + '.' + pad(date.getMonth() + 1) + '.' + date.getFullYear() + ' ' +
+                   pad(date.getHours()) + ':' + pad(date.getMinutes()) + ':' + pad(date.getSeconds());
+        }
+
+        // Cell value (raw ISO, possibly followed by the dd.mm.yyyy search text) -> yyyy-mm-dd
+        function toISODate(value) {
+            return value ? String(value).substring(0, 10) : '';
+        }
+
+        // Date column renderer: dd.mm.yyyy on screen, ISO for sorting,
+        // and both forms for the search box so "23.02.2025" can be found.
+        const dateRender = {
+            display: function(data) { return formatDateDMY(data); },
+            sort: function(data) { return data || ''; },
+            filter: function(data) { return data ? toISODate(data) + ' ' + formatDateDMY(data) : ''; }
+        };
+
+        // Date pickers: flatpickr shows dd.mm.yyyy in every browser/locale
+        // (native <input type="date"> follows the OS locale, e.g. mm/dd/yyyy),
+        // while the underlying input keeps yyyy-mm-dd for the filters.
+        function initDatePicker(el) {
+            if (!el || el._flatpickr) return;
+            flatpickr(el, {
+                dateFormat: 'Y-m-d',
+                altInput: true,
+                altFormat: 'd.m.Y',
+                allowInput: true,
+                disableMobile: true,
+                locale: { firstDayOfWeek: 1 }
+            });
+        }
+
+        function clearDatePicker(el) {
+            if (el && el._flatpickr) el._flatpickr.clear(false);
+            $(el).removeClass('has-value');
+            if (el && el._flatpickr && el._flatpickr.altInput) $(el._flatpickr.altInput).removeClass('has-value');
+        }
+
+        // Column configuration
+        const columnConfig = [
+            { data: 'sntrack_id', title: 'SNTrack ID' },
+            { data: 'ADM', title: 'ADM' },
+            { data: 'ntwk_org', title: 'ntwk_org' },
+            { data: 'SatName', title: 'SatName' },
+            { data: 'long_nom', title: 'long_nom', render: function(data) {
+                if (data === null || data === undefined || data === '') return '';
+                var num = parseFloat(data);
+                if (isNaN(num)) return data;
+                return (Math.round(num * 10) / 10).toString();
+            }},
+            { data: 'BRREG', title: 'BRReg', render: dateRender },
+            { data: 'DateOfReceive', title: 'DateOfReceive', render: dateRender },
+            { data: 'ntc_id', title: 'Notice ID' },
+            { data: 'act_code', title: 'act_code' },
+            { data: 'tgt_ntc_id', title: 'tgt_ntc_id' },
+            { data: 'TypeOfSubmission', title: 'TypeOfSubmission', render: function(data) {
+                return getTypeShortName(data);
+            }},
+            { data: 'Status', title: 'Status' },
+            { data: 'PHASE', title: 'PHASE' },
+            { data: 'f_11_32A', title: '11.32A', render: function(data, type) {
+                if (type === 'filter') { return data ? 'True' : 'False'; }
+                return data;
+            }},
+            { data: 'f_11_41', title: '11.41', render: function(data, type) {
+                if (type === 'filter') { return data ? 'True' : 'False'; }
+                return data;
+            }},
+            { data: 'subtoc', title: 'subtoc', render: function(data, type) {
+                if (type === 'filter') { return data ? 'True' : 'False'; }
+                return data;
+            }},
+            { data: 'd_check_in', title: 'd_check_in', render: dateRender },
+            { data: 'd_spr_out', title: 'd_spr_out', render: dateRender },
+            { data: 'CIRC', title: 'CIRC' },
+            { data: 'PUB', title: 'pub', render: dateRender },
+            { data: 'CIRC2', title: 'CIRC2' },
+            { data: 'PUB2', title: 'pub2', render: dateRender },
+            { data: 'CIRC3', title: 'CIRC3' },
+            { data: 'PUB3', title: 'pub3', render: dateRender },
+            { data: 'SUP', title: 'SUP' },
+            { data: 'remarks', title: 'remarks' },
+            { data: 'InternalReference', title: 'InternalReference' },
+            { data: 'RES156', title: 'Res156', render: function(data) { return data ? 'Yes' : ''; }},
+            { data: 'RES169', title: 'Res169', render: function(data) { return data ? 'Yes' : ''; }},
+            { data: 'RES123', title: 'Res123', render: function(data) { return data ? 'Yes' : ''; }}
+        ];
+
+        // Track column visibility (initialized inside $(document).ready via initColumnVisibility)
+        let columnVisibility = [];
+
+        // Handle select color change
+        function handleSelectColor(el) {
+            if (el.value && el.value !== '' && el.selectedIndex > 0) {
+                el.classList.add('has-value');
+            } else {
+                el.classList.remove('has-value');
+            }
+        }
+
+        // Handle date color change
+        function handleDateColor(el) {
+            // With flatpickr the visible box is the alt input, so color both.
+            var targets = [el];
+            if (el._flatpickr && el._flatpickr.altInput) targets.push(el._flatpickr.altInput);
+            targets.forEach(function(t) { t.classList.toggle('has-value', !!el.value); });
+        }
+
+        // Update API status indicator
+        function updateApiStatus(status, message) {
+            const $apiStatus = $('#apiStatus');
+            $apiStatus.removeClass('connected error');
+            if (status === 'connected') {
+                $apiStatus.addClass('connected');
+            } else if (status === 'error') {
+                $apiStatus.addClass('error');
+            }
+            $apiStatus.find('.status-text').text(message);
+        }
+
+        // ==========================================
+        // Dev Mode Toggle
+        // ==========================================
+        (function initDevMode() {
+            var $body = $('body');
+            var $checkbox = $('#devModeCheckbox');
+            var saved = localStorage.getItem('devMode') === 'true';
+
+            function apply(active) {
+                $body.toggleClass('dev-mode', active);
+                $checkbox.prop('checked', active);
+                localStorage.setItem('devMode', active ? 'true' : 'false');
+            }
+
+            // Restore saved preference
+            if (saved) apply(true);
+
+            $checkbox.on('change', function() {
+                apply(this.checked);
+            });
+        })();
+
+        // Show/hide loading overlay
+        function showLoading(show, message) {
+            const $overlay = $('#loadingOverlay');
+            if (show) {
+                $overlay.removeClass('hidden');
+                if (message) {
+                    $overlay.find('.loading-text').text(message);
+                }
+            } else {
+                $overlay.addClass('hidden');
+            }
+        }
+
+        $(document).ready(function() {
+            var table;
+            var allData = [];
+            
+            // Column config version - increment when columns change
+            const COLUMN_CONFIG_VERSION = 4; // v4: added Res156/169/123 columns
+
+            // Default column visibility: SNTrackID, ADM, SatName, long_nom, BRReg, DateOfReceive,
+            // Notice ID, act_code, tgt_ntc_id, TypeOfSubmission, Status, 11.32A, 11.41, subtoc, Res156/169/123
+            const DEFAULT_COLUMN_VISIBILITY = [
+                true,  // 0  SNTrack ID
+                true,  // 1  ADM
+                false, // 2  ntwk_org
+                true,  // 3  SatName
+                true,  // 4  long_nom
+                true,  // 5  BRReg
+                true,  // 6  DateOfReceive
+                true,  // 7  Notice ID
+                true,  // 8  act_code
+                true,  // 9  tgt_ntc_id
+                true,  // 10 TypeOfSubmission
+                true,  // 11 Status
+                false, // 12 PHASE
+                true,  // 13 11.32A
+                true,  // 14 11.41
+                true,  // 15 subtoc
+                false, // 16 d_check_in
+                false, // 17 d_spr_out
+                false, // 18 CIRC
+                false, // 19 pub
+                false, // 20 CIRC2
+                false, // 21 pub2
+                false, // 22 CIRC3
+                false, // 23 pub3
+                false, // 24 SUP
+                false, // 25 remarks
+                false, // 26 InternalReference
+                true,  // 27 Res156
+                true,  // 28 Res169
+                true   // 29 Res123
+            ];
+
+            // Initialize column visibility - check localStorage first
+            (function initColumnVisibility() {
+                try {
+                    var savedVersion = localStorage.getItem('ituTableColumnVersion');
+                    var saved = localStorage.getItem('ituTableColumnSettings');
+                    
+                    // If version mismatch or no version, clear old settings
+                    if (savedVersion !== String(COLUMN_CONFIG_VERSION)) {
+                        localStorage.removeItem('ituTableColumnSettings');
+                        localStorage.setItem('ituTableColumnVersion', String(COLUMN_CONFIG_VERSION));
+                        columnVisibility = [...DEFAULT_COLUMN_VISIBILITY];
+                        return;
+                    }
+                    
+                    if (saved) {
+                        var parsed = JSON.parse(saved);
+                        if (Array.isArray(parsed) && 
+                            parsed.length === columnConfig.length && 
+                            parsed.filter(v => v).length > 0) {
+                            columnVisibility = parsed;
+                        } else {
+                            localStorage.removeItem('ituTableColumnSettings');
+                            columnVisibility = [...DEFAULT_COLUMN_VISIBILITY];
+                        }
+                    } else {
+                        columnVisibility = [...DEFAULT_COLUMN_VISIBILITY];
+                    }
+                } catch(e) {
+                    localStorage.removeItem('ituTableColumnSettings');
+                    columnVisibility = [...DEFAULT_COLUMN_VISIBILITY];
+                }
+            })();
+
+            // Build column chips
+            function buildColumnChips() {
+                var $container = $('#columnChipsContainer');
+                $container.empty();
+
+                columnConfig.forEach(function(col, idx) {
+                    var isActive = columnVisibility[idx];
+                    var $chip = $('<label class="col-chip' + (isActive ? ' active' : '') + '" data-index="' + idx + '">' +
+                        '<input type="checkbox" ' + (isActive ? 'checked' : '') + '>' +
+                        '<i class="fas fa-check-circle"></i>' +
+                        '<span>' + col.title + '</span>' +
+                        '</label>');
+                    
+                    $chip.on('click', function(e) {
+                        e.preventDefault();
+                        var $this = $(this);
+                        var $cb = $this.find('input');
+                        var checked = !$cb.prop('checked');
+                        $cb.prop('checked', checked);
+                        $this.toggleClass('active', checked);
+                        columnVisibility[idx] = checked;
+                    });
+
+                    $container.append($chip);
+                });
+            }
+
+            // Select all columns
+            $('#selectAllColumns').on('click', function() {
+                columnVisibility = [...DEFAULT_COLUMN_VISIBILITY];
+                buildColumnChips();
+            });
+
+            // Deselect all columns
+            $('#deselectAllColumns').on('click', function() {
+                columnVisibility = columnConfig.map(() => false);
+                buildColumnChips();
+            });
+
+            // Reset column settings
+            $('#resetColumnSettings').on('click', function() {
+                localStorage.removeItem('ituTableColumnSettings');
+                columnVisibility = [...DEFAULT_COLUMN_VISIBILITY];
+                buildColumnChips();
+                if (table) {
+                    columnConfig.forEach(function(col, idx) {
+                        table.column(idx).visible(true);
+                    });
+                    table.columns.adjust().draw();
+                    buildColumnFilters(table);
+                }
+            });
+
+            // Apply column settings
+            $('#applyColumnSettings').on('click', function() {
+                var visibleCount = columnVisibility.filter(v => v).length;
+                if (visibleCount === 0) {
+                    alert('At least one column must be visible!');
+                    return;
+                }
+                
+                columnConfig.forEach(function(col, idx) {
+                    table.column(idx).visible(columnVisibility[idx]);
+                });
+                table.columns.adjust().draw();
+                buildColumnFilters(table);
+
+                try {
+                    localStorage.setItem('ituTableColumnSettings', JSON.stringify(columnVisibility));
+                } catch(e) {
+                    console.warn('Cannot save column settings:', e);
+                }
+            });
+
+            // Restore column settings from localStorage
+            function restoreColumnSettings() {
+                try {
+                    var savedVersion = localStorage.getItem('ituTableColumnVersion');
+                    if (savedVersion !== String(COLUMN_CONFIG_VERSION)) {
+                        // Version mismatch, reset everything
+                        localStorage.removeItem('ituTableColumnSettings');
+                        localStorage.setItem('ituTableColumnVersion', String(COLUMN_CONFIG_VERSION));
+                        columnVisibility = [...DEFAULT_COLUMN_VISIBILITY];
+                    } else {
+                        var saved = localStorage.getItem('ituTableColumnSettings');
+                        if (saved) {
+                            var parsedSettings = JSON.parse(saved);
+                            var visibleCount = parsedSettings.filter(v => v).length;
+                            if (visibleCount > 0 && parsedSettings.length === columnConfig.length) {
+                                columnVisibility = parsedSettings;
+                            } else {
+                                columnVisibility = [...DEFAULT_COLUMN_VISIBILITY];
+                                localStorage.removeItem('ituTableColumnSettings');
+                            }
+                        }
+                    }
+                    if (table) {
+                        columnConfig.forEach(function(col, idx) {
+                            table.column(idx).visible(columnVisibility[idx]);
+                        });
+                        buildColumnChips();
+                        // buildColumnFilters is called right after in initComplete
+                    }
+                } catch(e) {
+                    console.warn('Cannot restore column settings:', e);
+                    columnVisibility = [...DEFAULT_COLUMN_VISIBILITY];
+                }
+            }
+
+            // Date column indices for range filtering (updated for Status column at index 11)
+            const dateColumnIndices = {
+                'BRREG': 5,
+                'DateOfReceive': 6,
+                'd_check_in': 16,
+                'd_spr_out': 17,
+                'PUB': 19,
+                'PUB2': 21,
+                'PUB3': 23
+            };
+
+            // Custom filtering function (registered only once globally)
+            if (!window._ituSearchFnRegistered) {
+                window._ituSearchFnRegistered = true;
+                $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
+                // Compare as yyyy-mm-dd (date pickers hold ISO values; cells start with the raw ISO date)
+                var dateStart = $('#filter_date_start').val();
+                var dateEnd = $('#filter_date_end').val();
+                var dateVal = toISODate(data[6]);
+                if (dateStart && dateVal < dateStart) return false;
+                if (dateEnd && dateVal > dateEnd) return false;
+
+                var brregStart = $('#filter_brreg_start').val();
+                var brregEnd = $('#filter_brreg_end').val();
+                var brregVal = toISODate(data[5]);
+                if (brregStart && brregVal < brregStart) return false;
+                if (brregEnd && brregVal > brregEnd) return false;
+
+                for (var key in dateColumnIndices) {
+                    var colIdx = dateColumnIndices[key];
+                    var minVal = $('#col-min-date-' + key).val();
+                    var maxVal = $('#col-max-date-' + key).val();
+                    var cellVal = toISODate(data[colIdx]);
+                    if (minVal && cellVal < minVal) return false;
+                    if (maxVal && cellVal > maxVal) return false;
+                }
+
+                // TypeOfSubmission multi-select filter (column index 10)
+                if (selectedTypeOfSubmissions.length > 0) {
+                    var typeVal = data[10] || '';
+                    // Find original value from short name
+                    var originalType = typeVal;
+                    for (var fullName in typeOfSubmissionMap) {
+                        if (typeOfSubmissionMap[fullName] === typeVal) {
+                            originalType = fullName;
+                            break;
+                        }
+                    }
+                    if (!selectedTypeOfSubmissions.includes(originalType) && !selectedTypeOfSubmissions.includes(typeVal)) {
+                        return false;
+                    }
+                }
+
+                // ADM multi-select filter (column index 1)
+                if (selectedADMs.length > 0 && selectedADMs.length < allADMs.length) {
+                    var admVal = data[1] || '';
+                    if (!selectedADMs.includes(admVal)) {
+                        return false;
+                    }
+                }
+
+                // Status multi-select filter (column index 11)
+                if (selectedStatuses.length > 0 && selectedStatuses.length < allStatuses.length) {
+                    var statusVal = data[11] || '';
+                    if (!selectedStatuses.includes(statusVal)) {
+                        return false;
+                    }
+                }
+
+                // SUP multi-select filter (column index 24)
+                if (selectedSUPs.length > 0 && selectedSUPs.length < allSUPs.length) {
+                    var supVal = data[24] || '';
+                    if (!selectedSUPs.includes(supVal)) {
+                        return false;
+                    }
+                }
+
+                return true;
+            });
+            } // end if (!window._ituSearchFnRegistered)
+
+            // Initialize DataTable
+            var tableInitialized = false;
+            
+            function initTable(data) {
+                if (tableInitialized) {
+                    console.warn('Table already initialized, skipping');
+                    return;
+                }
+                
+                if ($.fn.DataTable.isDataTable('#ituTable')) {
+                    $('#ituTable').DataTable().destroy();
+                }
+                
+                tableInitialized = true;
+                
+                table = $('#ituTable').DataTable({
+                    data: data,
+                    columns: columnConfig,
+                    orderCellsTop: true,
+                    pageLength: 20,
+                    order: [[6, "desc"], [5, "desc"], [7, "asc"]],
+                    dom: '<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"i>>' +
+                         '<"row"<"col-sm-12"tr>>' +
+                         '<"row"<"col-sm-12 col-md-5"><"col-sm-12 col-md-7"p>>',
+                    initComplete: function() {
+                        var api = this.api();
+                        buildColumnChips();
+                        restoreColumnSettings();
+                        buildColumnFilters(api);
+                        $('#ituTable').show();
+                        var now = new Date();
+                        $('#lastUpdated').text('Loaded: ' + formatDateTimeDMY(now) + ' (' + allData.length + ' records)');
+                    }
+                });
+            }
+
+            // ==========================================
+            // Load data from local cache on page open (instant)
+            // The backend refresh thread keeps cached_data.json up to date
+            // every 10 minutes. Use the Refresh button to pull fresh data
+            // from the API on demand.
+            // ==========================================
+            function loadDataFromCache() {
+                showLoading(true, 'Loading data...');
+                updateApiStatus('', 'Loading...');
+
+                $.ajax({
+                    url: './data/cached_data.json',
+                    dataType: 'json',
+                    timeout: 10000,
+                    success: function(cached) {
+                        showLoading(false);
+                        // Support both wrapped format {generated_at, data} and plain array
+                        var data = Array.isArray(cached) ? cached : (cached.data || []);
+                        var generatedAt = cached.generated_at || null;
+
+                        console.log('Loaded from cache:', data.length, 'records');
+
+                        allData = data;
+                        populateADMFilter(data);
+                        populateStatusFilter(data);
+                        initTable(data);
+
+                        var timeLabel = generatedAt
+                            ? formatDateTimeDMY(new Date(generatedAt))
+                            : 'unknown time';
+                        $('#lastUpdated').text('Generated: ' + timeLabel + ' (' + data.length + ' records)');
+                        $('#lastUpdated').data('timestamp', generatedAt || '');
+                        updateApiStatus('connected', 'Connected - ' + data.length + ' records');
+                    },
+                    error: function() {
+                        showLoading(false);
+                        updateApiStatus('error', 'No cached data available');
+                        $('#lastUpdated').html('<span style="color:red">No data available. Click Refresh to fetch from server.</span>');
+                        initTable([]);
+                    }
+                });
+            }
+
+            // ==========================================
+            // Load data from API (used by Refresh button)
+            // ==========================================
+            function loadDataFromAPI() {
+                showLoading(true, 'Fetching data from server...');
+                updateApiStatus('', 'Connecting...');
+
+                $.ajax({
+                    url: API_DATA_ENDPOINT,
+                    dataType: 'json',
+                    timeout: 30000, // 30 second timeout (DB queries can be slow)
+                    success: function(response) {
+                        showLoading(false);
+                        
+                        if (response.success) {
+                            console.log('API Response:', response.count, 'records');
+                            updateApiStatus('connected', 'Connected - ' + response.count + ' records');
+                            
+                            var data = response.data;
+                            console.log('API returned:', data.length, 'records');
+                            
+                            allData = data;
+                            populateADMFilter(data);
+                            populateStatusFilter(data);
+                            initTable(data);
+                        } else {
+                            console.error('API returned error:', response.error);
+                            updateApiStatus('error', 'Error: ' + response.error);
+                            $('#lastUpdated').html('<span style="color:red">Error: ' + response.error + '</span>');
+                            initTable([]);
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        showLoading(false);
+                        console.error('Failed to load data from API:', status, error);
+                        // Show cert-trust banner if the request was blocked (status 0 = network/cert error)
+                        // Banner is only visible when Dev Mode is ON.
+                        if (xhr.status === 0) {
+                            $('#certTrustBanner').addClass('active');
+                        }
+                        updateApiStatus('error', 'Offline – using backup data');
+
+                        // Fallback: load local backup data.json
+                        // Chrome blocks file:// → file:// AJAX; skip the attempt when running locally
+                        if (window.location.protocol === 'file:') {
+                            showLoading(false);
+                            updateApiStatus('error', 'Offline – open via server URL to load backup');
+                            $('#lastUpdated').html('<span style="color:#e67e00">API offline. Open via the server URL to load backup data.</span>');
+                            initTable([]);
+                            return;
+                        }
+
+                        // Fallback: load local backup data.json
+                        showLoading(true, 'API unavailable. Loading backup data...');
+                        $.ajax({
+                            url: './data/cached_data.json',
+                            dataType: 'json',
+                            success: function(backup) {
+                                showLoading(false);
+                                // Support both wrapped format {generated_at, data} and plain array
+                                var backupData = Array.isArray(backup) ? backup : (backup.data || []);
+                                var generatedAt = backup.generated_at || null;
+
+                                allData = backupData;
+                                populateADMFilter(backupData);
+                                populateStatusFilter(backupData);
+                                initTable(backupData);
+
+                                var timeLabel = generatedAt
+                                    ? formatDateTimeDMY(new Date(generatedAt))
+                                    : 'unknown time';
+                                $('#lastUpdated').html(
+                                    '<span style="color:#e67e00;font-weight:600;" title="API offline – displaying cached data">' +
+                                    '<i class="fas fa-exclamation-triangle"></i> Backup data – generated: ' + timeLabel +
+                                    ' (' + filteredData.length + ' records)</span>'
+                                );
+                            },
+                            error: function() {
+                                showLoading(false);
+                                var errorMsg = 'API offline and no backup data available.';
+                                $('#lastUpdated').html('<span style="color:red">' + errorMsg + '</span>');
+                                initTable([]);
+                            }
+                        });
+                    }
+                });
+            }
+
+            // Load data on page load — reads cached_data.json instantly
+            loadDataFromCache();
+
+            // Build column filters in header row
+            function buildColumnFilters(api) {
+
+                var dateColumns = ['BRREG', 'DateOfReceive', 'd_check_in', 'd_spr_out', 'PUB', 'PUB2', 'PUB3'];
+                var selectColumns = {
+                    'act_code': ['', 'A', 'M'],
+                    'PHASE': ['', 'R', 'F'],
+                    'subtoc': ['', 'True', 'False'],
+                    'f_11_32A': ['', 'True', 'False'],
+                    'f_11_41': ['', 'True', 'False'],
+                    'CIRC': ['', 'HasValue', 'Empty'],
+                    'CIRC2': ['', 'HasValue', 'Empty'],
+                    'CIRC3': ['', 'HasValue', 'Empty'],
+                    'RES156': ['', 'Yes', 'Empty'],
+                    'RES169': ['', 'Yes', 'Empty'],
+                    'RES123': ['', 'Yes', 'Empty']
+                };
+
+                // ---- Rebuild the filter row from scratch every time ----
+                // DataTables may mangle custom <tr> elements inside <thead>
+                // when columns are toggled & .draw() is called, so we never
+                // rely on pre-existing filter-row DOM state.
+                var $oldRow = $('#ituTable thead .column-filter-row');
+                // Remove the old date pickers' calendars before their inputs are discarded
+                $oldRow.find('.js-date').each(function() {
+                    if (this._flatpickr) this._flatpickr.destroy();
+                });
+                var $newRow = $('<tr class="column-filter-row"></tr>');
+                for (let i = 0; i < columnConfig.length; i++) {
+                    $newRow.append('<th></th>');
+                }
+                if ($oldRow.length) {
+                    $oldRow.replaceWith($newRow);
+                } else {
+                    $('#ituTable thead').append($newRow);
+                }
+                var $filterCells = $newRow.find('th');
+
+                var builtCount = 0, skippedHidden = 0, skippedError = 0;
+                for (let colIdx = 0; colIdx < columnConfig.length; colIdx++) {
+                    try {
+                    var dataSrc = columnConfig[colIdx].data;
+                    var $th = $filterCells.eq(colIdx);
+                    if (!$th || $th.length === 0) { skippedError++; continue; }
+
+                    // Ask DataTables directly for actual visibility
+                    var colVisible = api.column(colIdx).visible();
+                    if (!colVisible) {
+                        $th.hide();
+                        skippedHidden++;
+                        continue;
+                    }
+                    $th.show();
+
+                    if (dateColumns.includes(dataSrc)) {
+                        var $dateFilter = $('<div class="column-filter-date">' +
+                            '<input type="text" class="js-date" id="col-min-date-' + dataSrc + '" placeholder="From" title="Start Date">' +
+                            '<input type="text" class="js-date" id="col-max-date-' + dataSrc + '" placeholder="To" title="End Date">' +
+                            '</div>');
+                        $th.append($dateFilter);
+                        $dateFilter.find('input').each(function() { initDatePicker(this); });
+                        $dateFilter.find('.js-date').on('change', function() {
+                            api.draw();
+                        });
+
+                    } else if (dataSrc === 'ADM') {
+                        // Multi-select dropdown for ADM (default: all selected)
+                        var $multiSelect = $('<div class="multi-select-dropdown">' +
+                            '<button type="button" class="multi-select-btn" id="admBtn">All</button>' +
+                            '<div class="multi-select-menu" id="admMenu"></div>' +
+                            '</div>');
+                        $th.append($multiSelect);
+
+                        // Collect unique ADM values from data
+                        var admSet = new Set();
+                        api.column(colIdx).data().each(function(val) {
+                            if (val) admSet.add(val);
+                        });
+                        allADMs = Array.from(admSet).sort();
+                        selectedADMs = [...allADMs]; // Default: all selected
+
+                        var $menu = $multiSelect.find('#admMenu');
+                        
+                        // Add Select All / Deselect All toggle
+                        var $toggleAll = $('<div class="multi-select-toggle-all" style="padding: 4px 8px; border-bottom: 1px solid #dee2e6; cursor: pointer; font-size: 0.7rem; font-weight: bold; color: var(--itu-blue);">' +
+                            '☑ Select All / Deselect All</div>');
+                        $menu.append($toggleAll);
+                        $toggleAll.on('click', function(e) {
+                            e.stopPropagation();
+                            var allChecked = selectedADMs.length === allADMs.length;
+                            if (allChecked) {
+                                // Deselect all
+                                selectedADMs = [];
+                                $menu.find('input[type="checkbox"]').prop('checked', false);
+                                $menu.find('.multi-select-item').removeClass('selected');
+                            } else {
+                                // Select all
+                                selectedADMs = [...allADMs];
+                                $menu.find('input[type="checkbox"]').prop('checked', true);
+                                $menu.find('.multi-select-item').addClass('selected');
+                            }
+                            updateAdmBtnText();
+                            api.draw();
+                        });
+                        
+                        allADMs.forEach(function(adm) {
+                            var $item = $('<label class="multi-select-item selected">' +
+                                '<input type="checkbox" value="' + adm + '" checked>' +
+                                '<span>' + adm + '</span>' +
+                                '</label>');
+                            $menu.append($item);
+                        });
+
+                        function updateAdmBtnText() {
+                            var count = selectedADMs.length;
+                            if (count === 0) {
+                                $('#admBtn').text('None');
+                            } else if (count === allADMs.length) {
+                                $('#admBtn').text('All (' + count + ')');
+                            } else if (count <= 2) {
+                                $('#admBtn').text(selectedADMs.join(', '));
+                            } else {
+                                $('#admBtn').text(selectedADMs.slice(0, 2).join(', ') + ' +' + (count - 2));
+                            }
+                        }
+                        updateAdmBtnText();
+
+                        $multiSelect.find('#admBtn').on('click', function(e) {
+                            e.stopPropagation();
+                            $('.multi-select-menu').not('#admMenu').removeClass('show');
+                            $('#admMenu').toggleClass('show');
+                        });
+
+                        $menu.find('input[type="checkbox"]').on('change', function() {
+                            var val = $(this).val();
+                            var $item = $(this).closest('.multi-select-item');
+                            if ($(this).is(':checked')) {
+                                if (!selectedADMs.includes(val)) selectedADMs.push(val);
+                                $item.addClass('selected');
+                            } else {
+                                selectedADMs = selectedADMs.filter(function(v) { return v !== val; });
+                                $item.removeClass('selected');
+                            }
+                            updateAdmBtnText();
+                            api.draw();
+                        });
+
+                    } else if (dataSrc === 'SUP') {
+                        // Multi-select dropdown for SUP (default: all selected)
+                        var $multiSelect = $('<div class="multi-select-dropdown">' +
+                            '<button type="button" class="multi-select-btn" id="supBtn">All</button>' +
+                            '<div class="multi-select-menu" id="supMenu"></div>' +
+                            '</div>');
+                        $th.append($multiSelect);
+
+                        // Collect unique SUP values from data
+                        var supSet = new Set();
+                        api.column(colIdx).data().each(function(val) {
+                            if (val !== null && val !== undefined && val !== '') supSet.add(val);
+                        });
+                        // Add empty option
+                        supSet.add('');
+                        allSUPs = Array.from(supSet).sort();
+                        selectedSUPs = [...allSUPs]; // Default: all selected
+
+                        var $menu = $multiSelect.find('#supMenu');
+                        
+                        // Add Select All / Deselect All toggle
+                        var $toggleAll = $('<div class="multi-select-toggle-all" style="padding: 4px 8px; border-bottom: 1px solid #dee2e6; cursor: pointer; font-size: 0.7rem; font-weight: bold; color: var(--itu-blue);">' +
+                            '☑ Select All / Deselect All</div>');
+                        $menu.append($toggleAll);
+                        $toggleAll.on('click', function(e) {
+                            e.stopPropagation();
+                            var allChecked = selectedSUPs.length === allSUPs.length;
+                            if (allChecked) {
+                                // Deselect all
+                                selectedSUPs = [];
+                                $menu.find('input[type="checkbox"]').prop('checked', false);
+                                $menu.find('.multi-select-item').removeClass('selected');
+                            } else {
+                                // Select all
+                                selectedSUPs = [...allSUPs];
+                                $menu.find('input[type="checkbox"]').prop('checked', true);
+                                $menu.find('.multi-select-item').addClass('selected');
+                            }
+                            updateSupBtnText();
+                            api.draw();
+                        });
+                        
+                        allSUPs.forEach(function(sup) {
+                            var displayVal = sup === '' ? '(empty)' : sup;
+                            var $item = $('<label class="multi-select-item selected">' +
+                                '<input type="checkbox" value="' + sup + '" checked>' +
+                                '<span>' + displayVal + '</span>' +
+                                '</label>');
+                            $menu.append($item);
+                        });
+
+                        function updateSupBtnText() {
+                            var count = selectedSUPs.length;
+                            if (count === 0) {
+                                $('#supBtn').text('None');
+                            } else if (count === allSUPs.length) {
+                                $('#supBtn').text('All (' + count + ')');
+                            } else {
+                                var display = selectedSUPs.slice(0, 2).map(function(s) { return s === '' ? '(empty)' : s; });
+                                $('#supBtn').text(display.join(', ') + (count > 2 ? ' +' + (count - 2) : ''));
+                            }
+                        }
+                        updateSupBtnText();
+
+                        $multiSelect.find('#supBtn').on('click', function(e) {
+                            e.stopPropagation();
+                            $('.multi-select-menu').not('#supMenu').removeClass('show');
+                            $('#supMenu').toggleClass('show');
+                        });
+
+                        $menu.find('input[type="checkbox"]').on('change', function() {
+                            var val = $(this).val();
+                            var $item = $(this).closest('.multi-select-item');
+                            if ($(this).is(':checked')) {
+                                if (!selectedSUPs.includes(val)) selectedSUPs.push(val);
+                                $item.addClass('selected');
+                            } else {
+                                selectedSUPs = selectedSUPs.filter(function(v) { return v !== val; });
+                                $item.removeClass('selected');
+                            }
+                            updateSupBtnText();
+                            api.draw();
+                        });
+
+                    } else if (dataSrc === 'long_nom') {
+                        // HasValue/Empty filter for long_nom
+                        var $select = $('<select class="column-filter">' +
+                            '<option value="">All</option>' +
+                            '<option value="HasValue">✓ Has Value</option>' +
+                            '<option value="Empty">∅ Empty</option>' +
+                            '</select>');
+                        $th.append($select);
+                        $select.on('change', function() {
+                            var val = $(this).val();
+                            var searchVal = '';
+                            if (val === 'Empty') {
+                                searchVal = '^$';
+                            } else if (val === 'HasValue') {
+                                searchVal = '^.+$';
+                            }
+                            api.column(colIdx).search(searchVal, true, false).draw();
+                        });
+
+                    } else if (dataSrc === 'TypeOfSubmission') {
+                        // Multi-select dropdown for TypeOfSubmission
+                        var $multiSelect = $('<div class="multi-select-dropdown">' +
+                            '<button type="button" class="multi-select-btn" id="typeOfSubmissionBtn">Select Types</button>' +
+                            '<div class="multi-select-menu" id="typeOfSubmissionMenu"></div>' +
+                            '</div>');
+                        $th.append($multiSelect);
+
+                        // Collect unique TypeOfSubmission values from data
+                        var typeSet = new Set();
+                        api.column(colIdx).data().each(function(val) {
+                            if (val) typeSet.add(val);
+                        });
+                        var allTypes = Array.from(typeSet);
+                        // Populate global and build chip filter
+                        allTypeOfSubmissions = allTypes;
+                        buildBigTypeFilter();
+
+                        var $menu = $multiSelect.find('#typeOfSubmissionMenu');
+                        
+                        // Add Select All / Deselect All toggle
+                        var $toggleAll = $('<div class="multi-select-toggle-all" style="padding: 4px 8px; border-bottom: 1px solid #dee2e6; cursor: pointer; font-size: 0.7rem; font-weight: bold; color: var(--itu-blue);">' +
+                            '☑ Select All / Deselect All</div>');
+                        $menu.append($toggleAll);
+                        $toggleAll.on('click', function(e) {
+                            e.stopPropagation();
+                            var allChecked = selectedTypeOfSubmissions.length === allTypes.length;
+                            if (allChecked) {
+                                selectedTypeOfSubmissions = [];
+                            } else {
+                                selectedTypeOfSubmissions = [...allTypes];
+                            }
+                            syncTypeFilterUI();
+                            api.draw();
+                        });
+                        
+                        typeSet.forEach(function(type) {
+                            var shortName = getTypeShortName(type);
+                            var isChecked = selectedTypeOfSubmissions.includes(type);
+                            var $item = $('<label class="multi-select-item' + (isChecked ? ' selected' : '') + '">' +
+                                '<input type="checkbox" value="' + type + '"' + (isChecked ? ' checked' : '') + '>' +
+                                '<span>' + shortName + '</span>' +
+                                '</label>');
+                            $menu.append($item);
+                        });
+
+                        // Update button text
+                        function updateBtnText() {
+                            var count = selectedTypeOfSubmissions.length;
+                            var totalCount = typeSet.size;
+                            if (count === 0) {
+                                $('#typeOfSubmissionBtn').text('None');
+                            } else if (count === totalCount) {
+                                $('#typeOfSubmissionBtn').text('All (' + count + ')');
+                            } else {
+                                var names = selectedTypeOfSubmissions.slice(0, 2).map(getTypeShortName);
+                                var text = names.join(', ');
+                                if (count > 2) text += ' +' + (count - 2);
+                                $('#typeOfSubmissionBtn').text(text);
+                            }
+                        }
+                        updateBtnText();
+
+                        // Toggle menu
+                        $multiSelect.find('#typeOfSubmissionBtn').on('click', function(e) {
+                            e.stopPropagation();
+                            $('.multi-select-menu').not('#typeOfSubmissionMenu').removeClass('show');
+                            $('#typeOfSubmissionMenu').toggleClass('show');
+                        });
+
+                        // Handle checkbox changes
+                        $menu.find('input[type="checkbox"]').on('change', function() {
+                            var val = $(this).val();
+                            var $item = $(this).closest('.multi-select-item');
+                            if ($(this).is(':checked')) {
+                                if (!selectedTypeOfSubmissions.includes(val)) {
+                                    selectedTypeOfSubmissions.push(val);
+                                }
+                                $item.addClass('selected');
+                            } else {
+                                selectedTypeOfSubmissions = selectedTypeOfSubmissions.filter(function(v) { return v !== val; });
+                                $item.removeClass('selected');
+                            }
+                            syncTypeFilterUI();
+                            api.draw();
+                        });
+
+                        // Close all menus when clicking outside
+                        $(document).on('click', function(e) {
+                            if (!$(e.target).closest('.multi-select-dropdown').length) {
+                                $('.multi-select-menu').removeClass('show');
+                            }
+                            if (!$(e.target).closest('.chip-multiselect-wrapper').length) {
+                                $('#chipTypeDropdown, #chipStatusDropdown').removeClass('show');
+                                $('#chipTypeBox, #chipStatusBox').removeClass('open');
+                            }
+                        });
+
+                    } else if (dataSrc === 'Status') {
+                        // Multi-select dropdown for Status (default: all selected)
+                        var $multiSelect = $('<div class="multi-select-dropdown">' +
+                            '<button type="button" class="multi-select-btn" id="statusBtn">All</button>' +
+                            '<div class="multi-select-menu" id="statusMenu"></div>' +
+                            '</div>');
+                        $th.append($multiSelect);
+
+                        // Collect unique Status values from data
+                        var statusSet = new Set();
+                        api.column(colIdx).data().each(function(val) {
+                            if (val !== null && val !== undefined && val !== '') statusSet.add(val);
+                        });
+                        // Add empty option
+                        statusSet.add('');
+                        allStatuses = Array.from(statusSet).sort();
+                        selectedStatuses = [...allStatuses]; // Default: all selected
+                        // Build top-bar chip filter
+                        buildBigStatusFilter();
+
+                        var $menu = $multiSelect.find('#statusMenu');
+                        
+                        // Add Select All / Deselect All toggle
+                        var $toggleAll = $('<div class="multi-select-toggle-all" style="padding: 4px 8px; border-bottom: 1px solid #dee2e6; cursor: pointer; font-size: 0.7rem; font-weight: bold; color: var(--itu-blue);">' +
+                            '☑ Select All / Deselect All</div>');
+                        $menu.append($toggleAll);
+                        $toggleAll.on('click', function(e) {
+                            e.stopPropagation();
+                            if (selectedStatuses.length === allStatuses.length) {
+                                selectedStatuses = [];
+                            } else {
+                                selectedStatuses = [...allStatuses];
+                            }
+                            syncStatusFilterUI();
+                            api.draw();
+                        });
+                        
+                        allStatuses.forEach(function(status) {
+                            var displayVal = status === '' ? '(empty)' : status;
+                            var $item = $('<label class="multi-select-item selected">' +
+                                '<input type="checkbox" value="' + status + '" checked>' +
+                                '<span>' + displayVal + '</span>' +
+                                '</label>');
+                            $menu.append($item);
+                        });
+
+                        $multiSelect.find('#statusBtn').on('click', function(e) {
+                            e.stopPropagation();
+                            $('.multi-select-menu').not('#statusMenu').removeClass('show');
+                            $('#statusMenu').toggleClass('show');
+                        });
+
+                        $menu.find('input[type="checkbox"]').on('change', function() {
+                            var val = $(this).val();
+                            var $item = $(this).closest('.multi-select-item');
+                            if ($(this).is(':checked')) {
+                                if (!selectedStatuses.includes(val)) selectedStatuses.push(val);
+                                $item.addClass('selected');
+                            } else {
+                                selectedStatuses = selectedStatuses.filter(function(v) { return v !== val; });
+                                $item.removeClass('selected');
+                            }
+                            syncStatusFilterUI();
+                            api.draw();
+                        });
+
+                    } else if (selectColumns[dataSrc]) {
+                        var options = selectColumns[dataSrc].map(function(opt) {
+                            var label = opt === '' ? 'All' : (opt === 'HasValue' ? '✓' : (opt === 'Empty' ? '∅' : opt));
+                            return '<option value="' + opt + '">' + label + '</option>';
+                        }).join('');
+                        var $select = $('<select class="column-filter">' + options + '</select>');
+                        $th.append($select);
+                        $select.on('change', function() {
+                            var val = $(this).val();
+                            var searchVal = '';
+                            if (val === 'Empty') {
+                                searchVal = '^$';
+                            } else if (val === 'HasValue') {
+                                searchVal = '^.+$';
+                            } else if (val) {
+                                searchVal = '^' + $.fn.dataTable.util.escapeRegex(val) + '$';
+                            }
+                            api.column(colIdx).search(searchVal, true, false).draw();
+                        });
+
+                    } else {
+                        var $input = $('<input type="text" class="column-filter" placeholder="Filter...">');
+                        $th.append($input);
+                        $input.on('keyup change', function() {
+                            var val = $(this).val();
+                            if (api.column(colIdx).search() !== val) {
+                                api.column(colIdx).search(val, false, true).draw();
+                            }
+                        });
+                    }
+                    builtCount++;
+                    } catch(e) {
+                        skippedError++;
+                        console.warn('Filter build failed for col', colIdx, dataSrc, e);
+                    }
+                }  // end for loop over columnConfig
+                console.log('buildColumnFilters: built=' + builtCount + ' hidden=' + skippedHidden + ' errors=' + skippedError + ' filterCells=' + $filterCells.length);
+            }
+
+            // Populate ADM filter from data
+            function populateADMFilter(data) {
+                var admSet = new Set();
+                data.forEach(function(row) {
+                    if (row.ADM) admSet.add(row.ADM);
+                });
+                var $select = $('#filter_ADM');
+                admSet.forEach(function(adm) {
+                    $select.append('<option value="' + adm + '">' + adm + '</option>');
+                });
+            }
+
+            // Sync Status chip box + in-table Status menu to selectedStatuses
+            function syncStatusFilterUI() {
+                var count = selectedStatuses.length;
+                var total = allStatuses.length;
+
+                // Rebuild chip box
+                var $box = $('#chipStatusBox');
+                $box.find('.chip-tag').remove();
+                var $placeholder = $('#chipStatusPlaceholder');
+                var $clearBtn = $('#chipStatusClearAll').detach();
+                if (count === 0) {
+                    $placeholder.show().text('Status: None');
+                    $box.removeClass('has-chips');
+                } else if (count === total) {
+                    $placeholder.show().text('Status: All (' + total + ')');
+                    $box.removeClass('has-chips');
+                } else {
+                    $placeholder.hide();
+                    $box.addClass('has-chips');
+                    selectedStatuses.forEach(function(status) {
+                        var label = status === '' ? '(empty)' : status;
+                        var $chip = $('<span class="chip-tag"></span>').text(label);
+                        var $rm = $('<button class="chip-tag-remove" title="Remove">&#10005;</button>');
+                        $rm.on('click', function(e) {
+                            e.stopPropagation();
+                            selectedStatuses = selectedStatuses.filter(function(v) { return v !== status; });
+                            syncStatusFilterUI();
+                            if (table) table.draw();
+                        });
+                        $chip.append($rm);
+                        $box.append($chip);
+                    });
+                }
+                $box.append($clearBtn);
+
+                // Sync in-table Status checkboxes
+                $('#statusMenu').find('input[type="checkbox"]').each(function() {
+                    var checked = selectedStatuses.includes($(this).val());
+                    $(this).prop('checked', checked);
+                    $(this).closest('.multi-select-item').toggleClass('selected', checked);
+                });
+                // Sync in-table button text
+                if (count === 0) {
+                    $('#statusBtn').text('None');
+                } else if (count === total) {
+                    $('#statusBtn').text('All (' + count + ')');
+                } else {
+                    var display = selectedStatuses.slice(0, 2).map(function(s) { return s === '' ? '(empty)' : s; });
+                    $('#statusBtn').text(display.join(', ') + (count > 2 ? ' +' + (count - 2) : ''));
+                }
+            }
+
+            // Build the chip-style Status dropdown
+            function buildBigStatusFilter() {
+                var $dropdown = $('#chipStatusDropdown');
+                $dropdown.find('.chip-dropdown-item').remove();
+
+                allStatuses.forEach(function(status) {
+                    var label = status === '' ? '(empty)' : status;
+                    var isChecked = selectedStatuses.includes(status);
+                    var $item = $('<label class="chip-dropdown-item' + (isChecked ? ' selected' : '') + '">' +
+                        '<input type="checkbox" value="' + status + '"' + (isChecked ? ' checked' : '') + '>' +
+                        '<span>' + label + '</span>' +
+                        '</label>');
+                    $item.find('input').on('change', function(e) {
+                        e.stopPropagation();
+                        var val = $(this).val();
+                        if ($(this).is(':checked')) {
+                            if (!selectedStatuses.includes(val)) selectedStatuses.push(val);
+                            $item.addClass('selected');
+                        } else {
+                            selectedStatuses = selectedStatuses.filter(function(v) { return v !== val; });
+                            $item.removeClass('selected');
+                        }
+                        syncStatusFilterUI();
+                        if (table) table.draw();
+                    });
+                    $dropdown.append($item);
+                });
+
+                $('#chipStatusToggleAll').off('click').on('click', function(e) {
+                    e.stopPropagation();
+                    if (selectedStatuses.length === allStatuses.length) {
+                        selectedStatuses = [];
+                    } else {
+                        selectedStatuses = [...allStatuses];
+                    }
+                    syncStatusFilterUI();
+                    if (table) table.draw();
+                });
+
+                $('#chipStatusBox').off('click').on('click', function(e) {
+                    e.stopPropagation();
+                    $('#chipStatusDropdown').toggleClass('show');
+                    $(this).toggleClass('open');
+                });
+
+                $('#chipStatusClearAll').off('click').on('click', function(e) {
+                    e.stopPropagation();
+                    selectedStatuses = [];
+                    syncStatusFilterUI();
+                    if (table) table.draw();
+                });
+
+                syncStatusFilterUI();
+            }
+
+            // (legacy – kept for call sites; now a no-op since chip is built from buildBigStatusFilter)
+            function populateStatusFilter(data) {}
+
+            // Sync both TypeOfSubmission filter UIs to selectedTypeOfSubmissions
+            function syncTypeFilterUI() {
+                var count = selectedTypeOfSubmissions.length;
+                var total = allTypeOfSubmissions.length;
+
+                // --- Chip box: rebuild chips ---
+                var $box = $('#chipTypeBox');
+                $box.find('.chip-tag').remove();
+                var $placeholder = $('#chipTypePlaceholder');
+                var $clearAll   = $('#chipTypeClearAll');
+                var $clearAllOuter = $clearAll.detach(); // keep the button but remove from DOM temporarily
+
+                if (count === 0) {
+                    $placeholder.show();
+                    $box.removeClass('has-chips');
+                } else {
+                    $placeholder.hide();
+                    $box.addClass('has-chips');
+                    var displayTypes = (count === total) ? ['(All ' + total + ')'] : selectedTypeOfSubmissions;
+                    displayTypes.forEach(function(type) {
+                        var label = (count === total) ? type : getTypeShortName(type);
+                        var $chip = $('<span class="chip-tag"></span>');
+                        $chip.text(label);
+                        if (count !== total) {
+                            var $rm = $('<button class="chip-tag-remove" title="Remove">&#10005;</button>');
+                            $rm.on('click', function(e) {
+                                e.stopPropagation();
+                                selectedTypeOfSubmissions = selectedTypeOfSubmissions.filter(function(v) { return v !== type; });
+                                syncTypeFilterUI();
+                                syncChipDropdown();
+                                if (table) table.draw();
+                            });
+                            $chip.append($rm);
+                        }
+                        $box.append($chip);
+                    });
+                }
+                $box.append($clearAllOuter);
+
+                // --- Chip dropdown checkboxes ---
+                syncChipDropdown();
+
+                // --- In-table column filter ---
+                $('#typeOfSubmissionMenu').find('input[type="checkbox"]').each(function() {
+                    var checked = selectedTypeOfSubmissions.includes($(this).val());
+                    $(this).prop('checked', checked);
+                    $(this).closest('.multi-select-item').toggleClass('selected', checked);
+                });
+                if (count === 0) {
+                    $('#typeOfSubmissionBtn').text('None');
+                } else if (count === total) {
+                    $('#typeOfSubmissionBtn').text('All (' + count + ')');
+                } else {
+                    var tblNames = selectedTypeOfSubmissions.slice(0, 2).map(getTypeShortName);
+                    var tblText = tblNames.join(', ');
+                    if (count > 2) tblText += ' +' + (count - 2);
+                    $('#typeOfSubmissionBtn').text(tblText);
+                }
+            }
+
+            // Sync chip dropdown checkbox states only
+            function syncChipDropdown() {
+                var count = selectedTypeOfSubmissions.length;
+                $('#chipTypeDropdown').find('input[type="checkbox"]').each(function() {
+                    var checked = selectedTypeOfSubmissions.includes($(this).val());
+                    $(this).prop('checked', checked);
+                    $(this).closest('.chip-dropdown-item').toggleClass('selected', checked);
+                });
+            }
+
+            // Build the chip-style TypeOfSubmission dropdown
+            function buildBigTypeFilter() {
+                var $dropdown = $('#chipTypeDropdown');
+                // Remove old options (keep the toggle-all header)
+                $dropdown.find('.chip-dropdown-item').remove();
+
+                allTypeOfSubmissions.forEach(function(type) {
+                    var shortName = getTypeShortName(type);
+                    var isChecked = selectedTypeOfSubmissions.includes(type);
+                    var $item = $('<label class="chip-dropdown-item' + (isChecked ? ' selected' : '') + '">' +
+                        '<input type="checkbox" value="' + type + '"' + (isChecked ? ' checked' : '') + '>' +
+                        '<span>' + shortName + ' <small style="color:#888">(' + type + ')</small>' + '</span>' +
+                        '</label>');
+                    $item.find('input').on('change', function(e) {
+                        e.stopPropagation();
+                        var val = $(this).val();
+                        if ($(this).is(':checked')) {
+                            if (!selectedTypeOfSubmissions.includes(val)) selectedTypeOfSubmissions.push(val);
+                            $item.addClass('selected');
+                        } else {
+                            selectedTypeOfSubmissions = selectedTypeOfSubmissions.filter(function(v) { return v !== val; });
+                            $item.removeClass('selected');
+                        }
+                        syncTypeFilterUI();
+                        if (table) table.draw();
+                    });
+                    $dropdown.append($item);
+                });
+
+                // Toggle-all click
+                $('#chipTypeToggleAll').off('click').on('click', function(e) {
+                    e.stopPropagation();
+                    if (selectedTypeOfSubmissions.length === allTypeOfSubmissions.length) {
+                        selectedTypeOfSubmissions = [];
+                    } else {
+                        selectedTypeOfSubmissions = [...allTypeOfSubmissions];
+                    }
+                    syncTypeFilterUI();
+                    if (table) table.draw();
+                });
+
+                // Box click → open/close dropdown
+                $('#chipTypeBox').off('click').on('click', function(e) {
+                    e.stopPropagation();
+                    $('#chipTypeDropdown').toggleClass('show');
+                    $(this).toggleClass('open');
+                });
+
+                // Clear-all button
+                $('#chipTypeClearAll').off('click').on('click', function(e) {
+                    e.stopPropagation();
+                    selectedTypeOfSubmissions = [];
+                    syncTypeFilterUI();
+                    if (table) table.draw();
+                });
+
+                syncTypeFilterUI();
+            }
+
+            // Search input
+            $('#searchInput').on('keyup', function() {
+                table.search(this.value).draw();
+            });
+
+            $('.search-btn').on('click', function() {
+                table.search($('#searchInput').val()).draw();
+            });
+
+            // ==========================================
+            // Row click -> popup with extra SRS fields
+            // ==========================================
+            function escapeHtml(v) {
+                return String(v).replace(/[&<>"']/g, function(c) {
+                    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+                });
+            }
+
+            // Fields of the main table, grouped by the database they come from
+            // (see fetch_data() in backend/api.py).
+            var DETAIL_DATE_FIELDS = new Set(['BRREG', '2d_date', 'd_val_in', 'd_check_in', 'd_spr_out',
+                'd_complete', 'PUB', 'd_wmeeting', 'PUB2', 'PUB3', 'DateOfReceive']);
+            var SNTRACK_FIELDS = [   // MS Access sntrdat.mdb, tblSpaceStnNotif
+                ['BRREG', 'BRReg'], ['2d_date', '2d_date'], ['ADM', 'ADM'], ['PHASE', 'PHASE'],
+                ['tgt_ntc_id', 'tgt_ntc_id'], ['f_11_32A', '11.32A'], ['f_11_41', '11.41'],
+                ['subtoc', 'subtoc'], ['SUP', 'SUP'], ['d_val_in', 'd_val_in'],
+                ['d_check_in', 'd_check_in'], ['d_spr_out', 'd_spr_out'], ['d_complete', 'd_complete'],
+                ['d_wmeeting', 'd_wmeeting'], ['CIRC', 'CIRC'], ['PUB', 'pub'], ['CIRC2', 'CIRC2'],
+                ['PUB2', 'pub2'], ['CIRC3', 'CIRC3'], ['PUB3', 'pub3'], ['remarks', 'remarks'],
+                ['tex_remarks', 'tex_remarks']
+            ];
+            var ESUB_FIELDS = [      // SQL Server: res908.Res908 + dbo.Submissions (Status)
+                ['DateOfReceive', 'DateOfReceive'], ['SatName', 'SatName'], ['long_nom', 'long_nom'],
+                ['ntwk_org', 'ntwk_org'], ['act_code', 'act_code'], ['TypeOfSubmission', 'TypeOfSubmission'],
+                ['Status', 'Status'], ['sntrack_id', 'SNTrack ID'], ['SubmissionId', 'SubmissionId'],
+                ['InternalReference', 'InternalReference'], ['DocumentumReference', 'DocumentumReference']
+            ];
+
+            // Empty values stay empty.
+            function detailValue(v) {
+                return (v === null || v === undefined || v === '') ? '' : escapeHtml(v);
+            }
+
+            function fieldValue(rowData, key) {
+                var v = rowData[key];
+                if (DETAIL_DATE_FIELDS.has(key)) return escapeHtml(formatDateDMY(v));
+                return detailValue(v);
+            }
+
+            function admList(adms) {
+                return adms.length ? ' <span class="details-adms">' + adms.map(escapeHtml).join(', ') + '</span>' : '';
+            }
+
+            // {O: ['CAN','F'], X: []} -> one line per symbol: "O  2 adm  CAN, F"
+            function detailSymbols(bySymbol) {
+                if (!bySymbol) return '';
+                return Object.keys(bySymbol).map(function(sym) {
+                    var adms = bySymbol[sym];
+                    return '<div><span class="details-sym">' + escapeHtml(sym) + '</span>' +
+                           '<span class="details-count">' + adms.length + ' adm</span>' + admList(adms) + '</div>';
+                }).join('');
+            }
+
+            // {O: {A: ['F'], Q: ['J']}} -> "coord_st O: agree_st A → F; agree_st Q → J"
+            function detailCoordDetails(details) {
+                if (!details) return '';
+                return Object.keys(details).map(function(coordSym) {
+                    var byAgree = details[coordSym];
+                    return '<div><span class="details-sym">' + escapeHtml(coordSym) + '</span>' +
+                        Object.keys(byAgree).map(function(agreeSym) {
+                            return '<div class="details-sub">agree_st ' + (agreeSym ? escapeHtml(agreeSym) : '(blank)') +
+                                   ' &rarr;' + admList(byAgree[agreeSym]) + '</div>';
+                        }).join('') + '</div>';
+                }).join('');
+            }
+
+            function detailProvs(list) {
+                return list ? list.map(escapeHtml).join(', ') : '';
+            }
+
+            function detailRow(label, html) {
+                return '<tr><th>' + label + '</th><td>' + html + '</td></tr>';
+            }
+
+            function detailSection(label, source) {
+                return '<tr class="details-section"><th colspan="2">' + label +
+                       (source ? ' <span class="details-source">' + source + '</span>' : '') + '</th></tr>';
+            }
+
+            function coordinationRows(t, isTr) {
+                t = t || {};
+                var html = '';
+                if (isTr) html += detailRow('has data', t.has_data === undefined ? '' : (t.has_data ? 'Yes' : 'No'));
+                html += detailRow('coord_prov', detailProvs(t.coord_prov_values));
+                html += detailRow('agree_st', detailSymbols(t.agree_st));
+                html += detailRow('coord_st', detailSymbols(t.coord_st));
+                html += detailRow('coord_st details', detailCoordDetails(t.coord_st_details));
+                return html;
+            }
+
+            // d: SRS details from /api/details (null while loading or on error).
+            // Every field name is always shown; missing values stay blank.
+            function renderDetails(rowData, d) {
+                var html = '<table class="table table-sm table-borderless">';
+
+                html += detailSection('SNTrack', 'MS Access sntrdat.mdb');
+                SNTRACK_FIELDS.forEach(function(f) { html += detailRow(f[1], fieldValue(rowData, f[0])); });
+
+                html += detailSection('e-submission', 'SQL Server (res908 / Submissions)');
+                ESUB_FIELDS.forEach(function(f) {
+                    var v = f[0] === 'TypeOfSubmission' ? escapeHtml(getTypeShortName(rowData[f[0]]) || '')
+                                                        : fieldValue(rowData, f[0]);
+                    html += detailRow(f[1], v);
+                });
+
+                html += detailSection('SRS', 'srs_all.mdb');
+                if (d && !d.in_srs) {
+                    html += '<tr><td colspan="2" class="text-muted">Notice not found in SRS database.</td></tr>';
+                }
+                d = d || {};
+                html += detailRow('Res156', rowData.RES156 ? 'Yes' : '');
+                html += detailRow('Res169', rowData.RES169 ? 'Yes' : '');
+                html += detailRow('Res123', rowData.RES123 ? 'Yes' : '');
+                html += detailRow('prov', detailValue(d.prov));
+                html += detailRow('ntf_occurs', detailValue(d.ntf_occurs));
+                html += detailRow('prov_desc', detailValue(d.prov_desc));
+                html += detailSection('SRS &ndash; provn');
+                html += coordinationRows(d.provn, false);
+                html += detailSection('SRS &ndash; tr_aff_ntw');
+                html += coordinationRows(d.tr_aff_ntw, true);
+                html += detailSection('SRS &ndash; row counts');
+                html += detailRow('coord_agree_ntw', detailValue(d.coord_agree_ntw_count));
+                html += detailRow('all_aff_ntw', detailValue(d.all_aff_ntw_count));
+                html += '</table>';
+                return html;
+            }
+
+            var detailsModal = new bootstrap.Modal(document.getElementById('detailsModal'));
+            var detailsRequest = null;
+
+            $('#ituTable tbody').on('click', 'tr', function() {
+                if (!table) return;
+                var rowData = table.row(this).data();
+                if (!rowData) return;
+                var ntcId = rowData.ntc_id;
+
+                $('#detailsModalTitle').text('Notice ' + (ntcId || '') +
+                    (rowData.SatName ? ' – ' + rowData.SatName : ''));
+                $('#detailsModalBody').html(renderDetails(rowData, null) +
+                    '<div class="text-center text-muted py-2"><i class="fas fa-spinner fa-spin"></i> Loading SRS data...</div>');
+                detailsModal.show();
+
+                if (detailsRequest) detailsRequest.abort();
+                if (!ntcId || !/^\d+$/.test(String(ntcId))) {
+                    $('#detailsModalBody').html(renderDetails(rowData, null) +
+                        '<div class="text-muted px-2">No Notice ID &ndash; SRS data not available.</div>');
+                    return;
+                }
+                detailsRequest = $.ajax({
+                    url: API_BASE_URL + '/api/details/' + encodeURIComponent(ntcId),
+                    dataType: 'json',
+                    timeout: 30000,
+                    success: function(resp) {
+                        $('#detailsModalBody').html(renderDetails(rowData, resp.details));
+                    },
+                    error: function(xhr, status) {
+                        if (status === 'abort') return;
+                        var msg = (xhr.responseJSON && xhr.responseJSON.error) || status || 'request failed';
+                        $('#detailsModalBody').html(renderDetails(rowData, null) +
+                            '<div class="text-danger px-2">Could not load SRS data: ' + escapeHtml(msg) + '</div>');
+                    }
+                });
+            });
+
+            // Filter handlers
+            $('#filter_ADM').on('change', function() {
+                var val = $(this).val();
+                table.column(1).search(val ? '^' + $.fn.dataTable.util.escapeRegex(val) + '$' : '', true, false).draw();
+            });
+
+            $('#filter_PHASE').on('change', function() {
+                var val = $(this).val();
+                table.column(11).search(val ? '^' + $.fn.dataTable.util.escapeRegex(val) + '$' : '', true, false).draw();
+            });
+
+            $('#filter_act_code').on('change', function() {
+                var val = $(this).val();
+                table.column(8).search(val ? '^' + $.fn.dataTable.util.escapeRegex(val) + '$' : '', true, false).draw();
+            });
+
+            $('#filter_subtoc').on('change', function() {
+                var val = $(this).val();
+                table.column(14).search(val ? '^' + $.fn.dataTable.util.escapeRegex(val) + '$' : '', true, false).draw();
+            });
+
+            $('#filter_f_11_32A').on('change', function() {
+                var val = $(this).val();
+                table.column(12).search(val ? '^' + $.fn.dataTable.util.escapeRegex(val) + '$' : '', true, false).draw();
+            });
+
+            $('#filter_f_11_41').on('change', function() {
+                var val = $(this).val();
+                table.column(13).search(val ? '^' + $.fn.dataTable.util.escapeRegex(val) + '$' : '', true, false).draw();
+            });
+
+            // Status is now fully handled by selectedStatuses via ext.search; no direct column search needed.
+
+            // Date filters trigger redraw
+            $('#filter_brreg_start, #filter_brreg_end').each(function() { initDatePicker(this); });
+            $('#filter_date_start, #filter_date_end, #filter_brreg_start, #filter_brreg_end').on('change', function() {
+                table.draw();
+            });
+
+            // ==========================================
+            // Refresh button - Reload from API
+            // ==========================================
+            $('#refreshBtn').on('click', function() {
+                var btn = $(this);
+                var currentTimestamp = $('#lastUpdated').data('timestamp') || '';
+
+                // Freshness check: if the current data timestamp is within
+                // 1 minute, skip the refresh — the data is already fresh.
+                if (currentTimestamp) {
+                    var dataTime = new Date(currentTimestamp);
+                    if (!isNaN(dataTime.getTime())) {
+                        var ageMs = Date.now() - dataTime.getTime();
+                        if (ageMs < 60000) {
+                            updateApiStatus('connected', 'Data is already up to date (' + Math.max(0, Math.round(ageMs / 1000)) + 's old)');
+                            return;
+                        }
+                    }
+                }
+
+                btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Refreshing...');
+                updateApiStatus('', 'Refreshing...');
+
+                // Trigger server-side refresh
+                $.ajax({
+                    url: API_BASE_URL + '/api/refresh',
+                    method: 'POST',
+                    timeout: 5000,
+                    error: function() {
+                        // Trigger still scheduled; proceed anyway
+                    },
+                    complete: function() {
+                        // Poll /api/data until the timestamp is within 1 minute
+                        var attempts = 0;
+                        var maxAttempts = 20; // ~60 seconds max (20 * 3s)
+                        function pollForFreshData() {
+                            attempts++;
+                            $.ajax({
+                                url: API_DATA_ENDPOINT,
+                                dataType: 'json',
+                                timeout: 10000,
+                                success: function(response) {
+                                    var fresh = false;
+                                    if (response.success && response.timestamp) {
+                                        var t = new Date(response.timestamp);
+                                        if (!isNaN(t.getTime()) && (Date.now() - t.getTime()) < 60000) {
+                                            fresh = true;
+                                        }
+                                    }
+                                    if (fresh) {
+                                        // Fresh data received!
+                                        allData = response.data;
+                                        populateStatusFilter(response.data);
+                                        table.clear().rows.add(response.data).draw();
+                                        var now = new Date();
+                                        $('#lastUpdated').text('Synced: ' + formatDateTimeDMY(now) + ' (' + response.data.length + ' records)');
+                                        $('#lastUpdated').data('timestamp', response.timestamp);
+                                        updateApiStatus('connected', 'Connected - ' + response.data.length + ' records');
+                                        btn.prop('disabled', false).html('<i class="fas fa-sync-alt"></i> Refresh');
+                                    } else if (attempts < maxAttempts) {
+                                        // Still waiting for refresh to complete
+                                        updateApiStatus('', 'Refreshing... (' + attempts + ')');
+                                        setTimeout(pollForFreshData, 3000);
+                                    } else {
+                                        // Timed out; use whatever data we got
+                                        if (response.success) {
+                                            allData = response.data;
+                                            populateStatusFilter(response.data);
+                                            table.clear().rows.add(response.data).draw();
+                                            $('#lastUpdated').text('Refresh may be incomplete – try again');
+                                        }
+                                        btn.prop('disabled', false).html('<i class="fas fa-sync-alt"></i> Refresh');
+                                        updateApiStatus('error', 'Refresh timed out');
+                                    }
+                                },
+                                error: function() {
+                                    if (attempts < maxAttempts) {
+                                        setTimeout(pollForFreshData, 3000);
+                                    } else {
+                                        btn.prop('disabled', false).html('<i class="fas fa-sync-alt"></i> Refresh');
+                                        updateApiStatus('error', 'Connection failed');
+                                    }
+                                }
+                            });
+                        }
+                        pollForFreshData();
+                    }
+                });
+            });
+
+            // Reset button
+            $('#resetBtn').on('click', function() {
+                $('.form-select-custom').val('').removeClass('has-value');
+                $('.form-control-custom').val('');
+                $('.js-date').each(function() { clearDatePicker(this); });
+                $('#searchInput').val('');
+                $('.column-filter').val('');
+                // Reset TypeOfSubmission to default (syncs chip box + in-table)
+                selectedTypeOfSubmissions = [...defaultSelectedTypes];
+                syncTypeFilterUI();
+
+                // Reset ADM multi-select to all selected
+                selectedADMs = [...allADMs];
+                $('#admMenu').find('input[type="checkbox"]').each(function() {
+                    $(this).prop('checked', true);
+                    $(this).closest('.multi-select-item').addClass('selected');
+                });
+                $('#admBtn').text('All (' + allADMs.length + ')');
+
+                // Reset SUP multi-select to all selected
+                selectedSUPs = [...allSUPs];
+                $('#supMenu').find('input[type="checkbox"]').each(function() {
+                    $(this).prop('checked', true);
+                    $(this).closest('.multi-select-item').addClass('selected');
+                });
+                $('#supBtn').text('All (' + allSUPs.length + ')');
+
+                // Reset Status to all selected (syncs chip box + in-table)
+                selectedStatuses = [...allStatuses];
+                syncStatusFilterUI();
+                
+                table.columns().search('');
+                table.search('');
+                table.draw();
+            });
+
+            // Download/Export button
+            $('#downloadBtn').on('click', function() {
+                const filteredData = table.rows({ search: 'applied' }).data().toArray();
+
+                // Date fields are exported as real Excel dates shown as dd.mm.yyyy,
+                // so they still sort and filter as dates inside Excel.
+                const dateFields = new Set(['BRREG', 'DateOfReceive', 'd_check_in', 'd_spr_out', 'PUB', 'PUB2', 'PUB3']);
+                const EXCEL_DATE_FORMAT = 'dd.mm.yyyy';
+
+                // ISO date -> Excel serial day number (timezone independent)
+                function fmtExportDate(data) {
+                    if (!data) return '';
+                    var s = String(data).substring(0, 10);
+                    var p = s.split('-');
+                    if (p.length !== 3) return s;
+                    return (Date.UTC(+p[0], +p[1] - 1, +p[2]) - Date.UTC(1899, 11, 30)) / 86400000;
+                }
+
+                // Only export currently visible columns, in their current order
+                const visibleCols = columnConfig
+                    .map(function(col, idx) { return { col: col, idx: idx }; })
+                    .filter(function(item) { return columnVisibility[item.idx]; });
+
+                const exportData = filteredData.map(function(row) {
+                    var out = {};
+                    visibleCols.forEach(function(item) {
+                        var key = item.col.data;
+                        var header = item.col.title;
+                        var val = row[key];
+                        if (dateFields.has(key)) {
+                            val = fmtExportDate(val);
+                        } else if (key === 'TypeOfSubmission') {
+                            val = getTypeShortName(val) || val || '';
+                        } else if (key === 'long_nom') {
+                            if (val !== null && val !== undefined && val !== '') {
+                                var n = parseFloat(val);
+                                val = isNaN(n) ? val : (Math.round(n * 10) / 10).toString();
+                            } else {
+                                val = '';
+                            }
+                        } else {
+                            val = (val !== null && val !== undefined) ? val : '';
+                        }
+                        out[header] = val;
+                    });
+                    return out;
+                });
+
+                const ws = XLSX.utils.json_to_sheet(exportData);
+                visibleCols.forEach(function(item, c) {
+                    if (!dateFields.has(item.col.data)) return;
+                    for (var r = 1; r <= exportData.length; r++) {
+                        var cell = ws[XLSX.utils.encode_cell({ r: r, c: c })];
+                        if (cell && cell.t === 'n') {
+                            cell.z = EXCEL_DATE_FORMAT;
+                            delete cell.w;  // drop cached text so the date format is used
+                        }
+                    }
+                });
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Notice Data");
+
+                const today = new Date();
+                const fileName = `notice_report_${today.getFullYear()}${(today.getMonth()+1).toString().padStart(2, '0')}${today.getDate().toString().padStart(2, '0')}.xlsx`;
+
+                XLSX.writeFile(wb, fileName);
+            });
+        });
+    </script>
+</body>
+</html>
