@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css" rel="stylesheet">
 
     <style>
         :root {
@@ -154,7 +155,7 @@
             flex: 1;
             height: 100%;
         }
-        .date-input-wrapper input[type="date"] {
+        .date-input-wrapper input {
             border: none;
             outline: none;
             width: 100%;
@@ -166,7 +167,7 @@
         }
 
         .form-select-custom.has-value,
-        .date-input-wrapper input[type="date"].has-value,
+        .date-input-wrapper input.has-value,
         .form-control-custom {
             color: #212529 !important;
         }
@@ -699,6 +700,81 @@
         .chip-dropdown-divider:hover {
             background: var(--itu-blue-light);
         }
+
+        /* --- Row details popup (SRS extra fields) --- */
+        #ituTable tbody tr {
+            cursor: pointer;
+        }
+
+        #detailsModal .modal-header {
+            border-bottom: 3px solid var(--itu-blue);
+            padding: 10px 16px;
+        }
+
+        #detailsModal .modal-title {
+            font-size: 1rem;
+            font-weight: 600;
+        }
+
+        #detailsModal table {
+            width: 100%;
+            font-size: 0.82rem;
+            margin: 0;
+        }
+
+        #detailsModal th {
+            width: 45%;
+            color: #495057;
+            font-weight: 600;
+            padding: 4px 8px;
+            vertical-align: top;
+        }
+
+        #detailsModal td {
+            padding: 4px 8px;
+            word-break: break-word;
+        }
+
+        #detailsModal .details-section th {
+            background: var(--header-bg);
+            color: var(--itu-blue);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            padding-top: 8px;
+        }
+
+        .details-sym {
+            display: inline-block;
+            background: var(--itu-blue-light);
+            border-radius: 3px;
+            padding: 0 6px;
+            margin: 1px 4px 1px 0;
+            white-space: nowrap;
+        }
+
+        .details-source {
+            float: right;
+            color: #6c757d;
+            font-weight: 400;
+            text-transform: none;
+            letter-spacing: 0;
+        }
+
+        .details-count {
+            display: inline-block;
+            min-width: 48px;
+            color: #495057;
+            font-weight: 600;
+        }
+
+        .details-adms {
+            color: #495057;
+        }
+
+        .details-sub {
+            margin-left: 24px;
+        }
     </style>
 </head>
 <body>
@@ -778,9 +854,9 @@
                 <div class="filter-group-row">
                     <div class="date-range-container">
                         <div class="date-label-static">BRReg</div>
-                        <div class="date-input-wrapper"><input type="date" id="filter_brreg_start" onchange="handleDateColor(this)"></div>
+                        <div class="date-input-wrapper"><input type="text" class="js-date" id="filter_brreg_start" placeholder="From dd.mm.yyyy" onchange="handleDateColor(this)"></div>
                         <div style="width:1px; background:#ced4da; height:60%;"></div>
-                        <div class="date-input-wrapper"><input type="date" id="filter_brreg_end" onchange="handleDateColor(this)"></div>
+                        <div class="date-input-wrapper"><input type="text" class="js-date" id="filter_brreg_end" placeholder="To dd.mm.yyyy" onchange="handleDateColor(this)"></div>
                     </div>
                 </div>
             </div>
@@ -849,11 +925,25 @@
         </div>
     </div>
 
+    <!-- Row details popup -->
+    <div class="modal fade" id="detailsModal" tabindex="-1" aria-labelledby="detailsModalTitle" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="detailsModalTitle">Notice details</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-2" id="detailsModalBody"></div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
 
     <script>
         // ==========================================
@@ -904,25 +994,57 @@
         let selectedStatuses = [];
         let allStatuses = [];
 
-        // Format date from ISO (yyyy-mm-dd) to mm/dd/yyyy
-        function formatDateToMMDDYYYY(data) {
+        // All dates are shown as dd.mm.yyyy (e.g. 07.10.2026).
+        // Sorting and filtering always use the raw ISO value (yyyy-mm-dd...).
+        function formatDateDMY(data) {
             if (!data) return '';
-            var dateStr = data.substring(0, 10);
+            var dateStr = String(data).substring(0, 10);
             var parts = dateStr.split('-');
             if (parts.length === 3) {
-                return parts[1] + '/' + parts[2] + '/' + parts[0];
+                return parts[2] + '.' + parts[1] + '.' + parts[0];
             }
             return dateStr;
         }
 
-        // Convert mm/dd/yyyy back to ISO format for comparison
-        function convertMMDDYYYYtoISO(dateStr) {
-            if (!dateStr) return '';
-            var parts = dateStr.split('/');
-            if (parts.length === 3) {
-                return parts[2] + '-' + parts[0] + '-' + parts[1];
-            }
-            return dateStr;
+        // Date + time as dd.mm.yyyy HH:MM:SS (local time)
+        function formatDateTimeDMY(date) {
+            var pad = function(n) { return String(n).padStart(2, '0'); };
+            return pad(date.getDate()) + '.' + pad(date.getMonth() + 1) + '.' + date.getFullYear() + ' ' +
+                   pad(date.getHours()) + ':' + pad(date.getMinutes()) + ':' + pad(date.getSeconds());
+        }
+
+        // Cell value (raw ISO, possibly followed by the dd.mm.yyyy search text) -> yyyy-mm-dd
+        function toISODate(value) {
+            return value ? String(value).substring(0, 10) : '';
+        }
+
+        // Date column renderer: dd.mm.yyyy on screen, ISO for sorting,
+        // and both forms for the search box so "23.02.2025" can be found.
+        const dateRender = {
+            display: function(data) { return formatDateDMY(data); },
+            sort: function(data) { return data || ''; },
+            filter: function(data) { return data ? toISODate(data) + ' ' + formatDateDMY(data) : ''; }
+        };
+
+        // Date pickers: flatpickr shows dd.mm.yyyy in every browser/locale
+        // (native <input type="date"> follows the OS locale, e.g. mm/dd/yyyy),
+        // while the underlying input keeps yyyy-mm-dd for the filters.
+        function initDatePicker(el) {
+            if (!el || el._flatpickr) return;
+            flatpickr(el, {
+                dateFormat: 'Y-m-d',
+                altInput: true,
+                altFormat: 'd.m.Y',
+                allowInput: true,
+                disableMobile: true,
+                locale: { firstDayOfWeek: 1 }
+            });
+        }
+
+        function clearDatePicker(el) {
+            if (el && el._flatpickr) el._flatpickr.clear(false);
+            $(el).removeClass('has-value');
+            if (el && el._flatpickr && el._flatpickr.altInput) $(el._flatpickr.altInput).removeClass('has-value');
         }
 
         // Column configuration
@@ -937,14 +1059,8 @@
                 if (isNaN(num)) return data;
                 return (Math.round(num * 10) / 10).toString();
             }},
-            { data: 'BRREG', title: 'BRReg', render: { 
-                display: function(data) { return formatDateToMMDDYYYY(data); },
-                sort: function(data) { return data || ''; }
-            }},
-            { data: 'DateOfReceive', title: 'DateOfReceive', render: { 
-                display: function(data) { return formatDateToMMDDYYYY(data); },
-                sort: function(data) { return data || ''; }
-            }},
+            { data: 'BRREG', title: 'BRReg', render: dateRender },
+            { data: 'DateOfReceive', title: 'DateOfReceive', render: dateRender },
             { data: 'ntc_id', title: 'Notice ID' },
             { data: 'act_code', title: 'act_code' },
             { data: 'tgt_ntc_id', title: 'tgt_ntc_id' },
@@ -965,29 +1081,14 @@
                 if (type === 'filter') { return data ? 'True' : 'False'; }
                 return data;
             }},
-            { data: 'd_check_in', title: 'd_check_in', render: { 
-                display: function(data) { return formatDateToMMDDYYYY(data); },
-                sort: function(data) { return data || ''; }
-            }},
-            { data: 'd_spr_out', title: 'd_spr_out', render: { 
-                display: function(data) { return formatDateToMMDDYYYY(data); },
-                sort: function(data) { return data || ''; }
-            }},
+            { data: 'd_check_in', title: 'd_check_in', render: dateRender },
+            { data: 'd_spr_out', title: 'd_spr_out', render: dateRender },
             { data: 'CIRC', title: 'CIRC' },
-            { data: 'PUB', title: 'pub', render: { 
-                display: function(data) { return formatDateToMMDDYYYY(data); },
-                sort: function(data) { return data || ''; }
-            }},
+            { data: 'PUB', title: 'pub', render: dateRender },
             { data: 'CIRC2', title: 'CIRC2' },
-            { data: 'PUB2', title: 'pub2', render: { 
-                display: function(data) { return formatDateToMMDDYYYY(data); },
-                sort: function(data) { return data || ''; }
-            }},
+            { data: 'PUB2', title: 'pub2', render: dateRender },
             { data: 'CIRC3', title: 'CIRC3' },
-            { data: 'PUB3', title: 'pub3', render: { 
-                display: function(data) { return formatDateToMMDDYYYY(data); },
-                sort: function(data) { return data || ''; }
-            }},
+            { data: 'PUB3', title: 'pub3', render: dateRender },
             { data: 'SUP', title: 'SUP' },
             { data: 'remarks', title: 'remarks' },
             { data: 'InternalReference', title: 'InternalReference' },
@@ -1010,11 +1111,10 @@
 
         // Handle date color change
         function handleDateColor(el) {
-            if (el.value) {
-                el.classList.add('has-value');
-            } else {
-                el.classList.remove('has-value');
-            }
+            // With flatpickr the visible box is the alt input, so color both.
+            var targets = [el];
+            if (el._flatpickr && el._flatpickr.altInput) targets.push(el._flatpickr.altInput);
+            targets.forEach(function(t) { t.classList.toggle('has-value', !!el.value); });
         }
 
         // Update API status indicator
@@ -1263,16 +1363,16 @@
             if (!window._ituSearchFnRegistered) {
                 window._ituSearchFnRegistered = true;
                 $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
-                // Convert mm/dd/yyyy to ISO for comparison
+                // Compare as yyyy-mm-dd (date pickers hold ISO values; cells start with the raw ISO date)
                 var dateStart = $('#filter_date_start').val();
                 var dateEnd = $('#filter_date_end').val();
-                var dateVal = convertMMDDYYYYtoISO(data[6] || '');
+                var dateVal = toISODate(data[6]);
                 if (dateStart && dateVal < dateStart) return false;
                 if (dateEnd && dateVal > dateEnd) return false;
 
                 var brregStart = $('#filter_brreg_start').val();
                 var brregEnd = $('#filter_brreg_end').val();
-                var brregVal = convertMMDDYYYYtoISO(data[5] || '');
+                var brregVal = toISODate(data[5]);
                 if (brregStart && brregVal < brregStart) return false;
                 if (brregEnd && brregVal > brregEnd) return false;
 
@@ -1280,7 +1380,7 @@
                     var colIdx = dateColumnIndices[key];
                     var minVal = $('#col-min-date-' + key).val();
                     var maxVal = $('#col-max-date-' + key).val();
-                    var cellVal = convertMMDDYYYYtoISO(data[colIdx] || '');
+                    var cellVal = toISODate(data[colIdx]);
                     if (minVal && cellVal < minVal) return false;
                     if (maxVal && cellVal > maxVal) return false;
                 }
@@ -1360,16 +1460,16 @@
                         buildColumnFilters(api);
                         $('#ituTable').show();
                         var now = new Date();
-                        $('#lastUpdated').text('Loaded: ' + now.toLocaleTimeString() + ' (' + allData.length + ' records)');
+                        $('#lastUpdated').text('Loaded: ' + formatDateTimeDMY(now) + ' (' + allData.length + ' records)');
                     }
                 });
             }
 
             // ==========================================
             // Load data from local cache on page open (instant)
-            // The backend refresh thread keeps cached_data.json up to date
-            // every 10 minutes. Use the Refresh button to pull fresh data
-            // from the API on demand.
+            // The table is shown from the cache first, then a refresh is
+            // triggered (same as clicking Refresh) so the user gets fresh data.
+            // Without user activity the backend refreshes once a day.
             // ==========================================
             function loadDataFromCache() {
                 showLoading(true, 'Loading data...');
@@ -1393,7 +1493,7 @@
                         initTable(data);
 
                         var timeLabel = generatedAt
-                            ? new Date(generatedAt).toLocaleString()
+                            ? formatDateTimeDMY(new Date(generatedAt))
                             : 'unknown time';
                         $('#lastUpdated').text('Generated: ' + timeLabel + ' (' + data.length + ' records)');
                         $('#lastUpdated').data('timestamp', generatedAt || '');
@@ -1404,6 +1504,10 @@
                         updateApiStatus('error', 'No cached data available');
                         $('#lastUpdated').html('<span style="color:red">No data available. Click Refresh to fetch from server.</span>');
                         initTable([]);
+                    },
+                    complete: function() {
+                        // Fetch fresh data on page open (skipped if the data is < 1 min old)
+                        $('#refreshBtn').trigger('click');
                     }
                 });
             }
@@ -1477,7 +1581,7 @@
                                 initTable(backupData);
 
                                 var timeLabel = generatedAt
-                                    ? new Date(generatedAt).toLocaleString()
+                                    ? formatDateTimeDMY(new Date(generatedAt))
                                     : 'unknown time';
                                 $('#lastUpdated').html(
                                     '<span style="color:#e67e00;font-weight:600;" title="API offline – displaying cached data">' +
@@ -1522,6 +1626,10 @@
                 // when columns are toggled & .draw() is called, so we never
                 // rely on pre-existing filter-row DOM state.
                 var $oldRow = $('#ituTable thead .column-filter-row');
+                // Remove the old date pickers' calendars before their inputs are discarded
+                $oldRow.find('.js-date').each(function() {
+                    if (this._flatpickr) this._flatpickr.destroy();
+                });
                 var $newRow = $('<tr class="column-filter-row"></tr>');
                 for (let i = 0; i < columnConfig.length; i++) {
                     $newRow.append('<th></th>');
@@ -1551,11 +1659,12 @@
 
                     if (dateColumns.includes(dataSrc)) {
                         var $dateFilter = $('<div class="column-filter-date">' +
-                            '<input type="date" id="col-min-date-' + dataSrc + '" placeholder="From" title="Start Date">' +
-                            '<input type="date" id="col-max-date-' + dataSrc + '" placeholder="To" title="End Date">' +
+                            '<input type="text" class="js-date" id="col-min-date-' + dataSrc + '" placeholder="From" title="Start Date">' +
+                            '<input type="text" class="js-date" id="col-max-date-' + dataSrc + '" placeholder="To" title="End Date">' +
                             '</div>');
                         $th.append($dateFilter);
-                        $dateFilter.find('input').on('change', function() {
+                        $dateFilter.find('input').each(function() { initDatePicker(this); });
+                        $dateFilter.find('.js-date').on('change', function() {
                             api.draw();
                         });
 
@@ -2207,6 +2316,171 @@
                 table.search($('#searchInput').val()).draw();
             });
 
+            // ==========================================
+            // Row click -> popup with extra SRS fields
+            // ==========================================
+            function escapeHtml(v) {
+                return String(v).replace(/[&<>"']/g, function(c) {
+                    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+                });
+            }
+
+            // Fields of the main table, grouped by the database they come from
+            // (see fetch_data() in backend/api.py).
+            var DETAIL_DATE_FIELDS = new Set(['BRREG', '2d_date', 'd_val_in', 'd_check_in', 'd_spr_out',
+                'd_complete', 'PUB', 'd_wmeeting', 'PUB2', 'PUB3', 'DateOfReceive']);
+            var SNTRACK_FIELDS = [   // MS Access sntrdat.mdb, tblSpaceStnNotif
+                ['BRREG', 'BRReg'], ['2d_date', '2d_date'], ['ADM', 'ADM'], ['PHASE', 'PHASE'],
+                ['tgt_ntc_id', 'tgt_ntc_id'], ['f_11_32A', '11.32A'], ['f_11_41', '11.41'],
+                ['subtoc', 'subtoc'], ['SUP', 'SUP'], ['d_val_in', 'd_val_in'],
+                ['d_check_in', 'd_check_in'], ['d_spr_out', 'd_spr_out'], ['d_complete', 'd_complete'],
+                ['d_wmeeting', 'd_wmeeting'], ['CIRC', 'CIRC'], ['PUB', 'pub'], ['CIRC2', 'CIRC2'],
+                ['PUB2', 'pub2'], ['CIRC3', 'CIRC3'], ['PUB3', 'pub3'], ['remarks', 'remarks'],
+                ['tex_remarks', 'tex_remarks']
+            ];
+            var ESUB_FIELDS = [      // SQL Server: res908.Res908 + dbo.Submissions (Status)
+                ['DateOfReceive', 'DateOfReceive'], ['SatName', 'SatName'], ['long_nom', 'long_nom'],
+                ['ntwk_org', 'ntwk_org'], ['act_code', 'act_code'], ['TypeOfSubmission', 'TypeOfSubmission'],
+                ['Status', 'Status'], ['sntrack_id', 'SNTrack ID'], ['SubmissionId', 'SubmissionId'],
+                ['InternalReference', 'InternalReference'], ['DocumentumReference', 'DocumentumReference']
+            ];
+
+            // Empty values stay empty.
+            function detailValue(v) {
+                return (v === null || v === undefined || v === '') ? '' : escapeHtml(v);
+            }
+
+            function fieldValue(rowData, key) {
+                var v = rowData[key];
+                if (DETAIL_DATE_FIELDS.has(key)) return escapeHtml(formatDateDMY(v));
+                return detailValue(v);
+            }
+
+            function admList(adms) {
+                return adms.length ? ' <span class="details-adms">' + adms.map(escapeHtml).join(', ') + '</span>' : '';
+            }
+
+            // {O: ['CAN','F'], X: []} -> one line per symbol: "O  2 adm  CAN, F"
+            function detailSymbols(bySymbol) {
+                if (!bySymbol) return '';
+                return Object.keys(bySymbol).map(function(sym) {
+                    var adms = bySymbol[sym];
+                    return '<div><span class="details-sym">' + escapeHtml(sym) + '</span>' +
+                           '<span class="details-count">' + adms.length + ' adm</span>' + admList(adms) + '</div>';
+                }).join('');
+            }
+
+            // {O: {A: ['F'], Q: ['J']}} -> "coord_st O: agree_st A → F; agree_st Q → J"
+            function detailCoordDetails(details) {
+                if (!details) return '';
+                return Object.keys(details).map(function(coordSym) {
+                    var byAgree = details[coordSym];
+                    return '<div><span class="details-sym">' + escapeHtml(coordSym) + '</span>' +
+                        Object.keys(byAgree).map(function(agreeSym) {
+                            return '<div class="details-sub">agree_st ' + (agreeSym ? escapeHtml(agreeSym) : '(blank)') +
+                                   ' &rarr;' + admList(byAgree[agreeSym]) + '</div>';
+                        }).join('') + '</div>';
+                }).join('');
+            }
+
+            function detailProvs(list) {
+                return list ? list.map(escapeHtml).join(', ') : '';
+            }
+
+            function detailRow(label, html) {
+                return '<tr><th>' + label + '</th><td>' + html + '</td></tr>';
+            }
+
+            function detailSection(label, source) {
+                return '<tr class="details-section"><th colspan="2">' + label +
+                       (source ? ' <span class="details-source">' + source + '</span>' : '') + '</th></tr>';
+            }
+
+            function coordinationRows(t, isTr) {
+                t = t || {};
+                var html = '';
+                if (isTr) html += detailRow('has data', t.has_data === undefined ? '' : (t.has_data ? 'Yes' : 'No'));
+                html += detailRow('coord_prov', detailProvs(t.coord_prov_values));
+                html += detailRow('agree_st', detailSymbols(t.agree_st));
+                html += detailRow('coord_st', detailSymbols(t.coord_st));
+                html += detailRow('coord_st details', detailCoordDetails(t.coord_st_details));
+                return html;
+            }
+
+            // d: SRS details from /api/details (null while loading or on error).
+            // Every field name is always shown; missing values stay blank.
+            function renderDetails(rowData, d) {
+                var html = '<table class="table table-sm table-borderless">';
+
+                html += detailSection('SNTrack', 'MS Access sntrdat.mdb');
+                SNTRACK_FIELDS.forEach(function(f) { html += detailRow(f[1], fieldValue(rowData, f[0])); });
+
+                html += detailSection('e-submission', 'SQL Server (res908 / Submissions)');
+                ESUB_FIELDS.forEach(function(f) {
+                    var v = f[0] === 'TypeOfSubmission' ? escapeHtml(getTypeShortName(rowData[f[0]]) || '')
+                                                        : fieldValue(rowData, f[0]);
+                    html += detailRow(f[1], v);
+                });
+
+                html += detailSection('SRS', 'srs_all.mdb');
+                if (d && !d.in_srs) {
+                    html += '<tr><td colspan="2" class="text-muted">Notice not found in SRS database.</td></tr>';
+                }
+                d = d || {};
+                html += detailRow('Res156', rowData.RES156 ? 'Yes' : '');
+                html += detailRow('Res169', rowData.RES169 ? 'Yes' : '');
+                html += detailRow('Res123', rowData.RES123 ? 'Yes' : '');
+                html += detailRow('prov', detailValue(d.prov));
+                html += detailRow('ntf_occurs', detailValue(d.ntf_occurs));
+                html += detailRow('prov_desc', detailValue(d.prov_desc));
+                html += detailSection('SRS &ndash; provn');
+                html += coordinationRows(d.provn, false);
+                html += detailSection('SRS &ndash; tr_aff_ntw');
+                html += coordinationRows(d.tr_aff_ntw, true);
+                html += detailSection('SRS &ndash; row counts');
+                html += detailRow('coord_agree_ntw', detailValue(d.coord_agree_ntw_count));
+                html += detailRow('all_aff_ntw', detailValue(d.all_aff_ntw_count));
+                html += '</table>';
+                return html;
+            }
+
+            var detailsModal = new bootstrap.Modal(document.getElementById('detailsModal'));
+            var detailsRequest = null;
+
+            $('#ituTable tbody').on('click', 'tr', function() {
+                if (!table) return;
+                var rowData = table.row(this).data();
+                if (!rowData) return;
+                var ntcId = rowData.ntc_id;
+
+                $('#detailsModalTitle').text('Notice ' + (ntcId || '') +
+                    (rowData.SatName ? ' – ' + rowData.SatName : ''));
+                $('#detailsModalBody').html(renderDetails(rowData, null) +
+                    '<div class="text-center text-muted py-2"><i class="fas fa-spinner fa-spin"></i> Loading SRS data...</div>');
+                detailsModal.show();
+
+                if (detailsRequest) detailsRequest.abort();
+                if (!ntcId || !/^\d+$/.test(String(ntcId))) {
+                    $('#detailsModalBody').html(renderDetails(rowData, null) +
+                        '<div class="text-muted px-2">No Notice ID &ndash; SRS data not available.</div>');
+                    return;
+                }
+                detailsRequest = $.ajax({
+                    url: API_BASE_URL + '/api/details/' + encodeURIComponent(ntcId),
+                    dataType: 'json',
+                    timeout: 30000,
+                    success: function(resp) {
+                        $('#detailsModalBody').html(renderDetails(rowData, resp.details));
+                    },
+                    error: function(xhr, status) {
+                        if (status === 'abort') return;
+                        var msg = (xhr.responseJSON && xhr.responseJSON.error) || status || 'request failed';
+                        $('#detailsModalBody').html(renderDetails(rowData, null) +
+                            '<div class="text-danger px-2">Could not load SRS data: ' + escapeHtml(msg) + '</div>');
+                    }
+                });
+            });
+
             // Filter handlers
             $('#filter_ADM').on('change', function() {
                 var val = $(this).val();
@@ -2241,6 +2515,7 @@
             // Status is now fully handled by selectedStatuses via ext.search; no direct column search needed.
 
             // Date filters trigger redraw
+            $('#filter_brreg_start, #filter_brreg_end').each(function() { initDatePicker(this); });
             $('#filter_date_start, #filter_date_end, #filter_brreg_start, #filter_brreg_end').on('change', function() {
                 table.draw();
             });
@@ -2273,10 +2548,14 @@
                     url: API_BASE_URL + '/api/refresh',
                     method: 'POST',
                     timeout: 5000,
-                    error: function() {
-                        // Trigger still scheduled; proceed anyway
+                    error: function(xhr) {
+                        // Server not reachable: keep the cached data on screen and stop here
+                        // instead of polling for minutes. status 0 = network / certificate error.
+                        if (xhr.status === 0) $('#certTrustBanner').addClass('active');
+                        btn.prop('disabled', false).html('<i class="fas fa-sync-alt"></i> Refresh');
+                        updateApiStatus('error', 'Server not reachable – showing cached data');
                     },
-                    complete: function() {
+                    success: function() {
                         // Poll /api/data until the timestamp is within 1 minute
                         var attempts = 0;
                         var maxAttempts = 20; // ~60 seconds max (20 * 3s)
@@ -2300,7 +2579,7 @@
                                         populateStatusFilter(response.data);
                                         table.clear().rows.add(response.data).draw();
                                         var now = new Date();
-                                        $('#lastUpdated').text('Synced: ' + now.toLocaleTimeString() + ' (' + response.data.length + ' records)');
+                                        $('#lastUpdated').text('Synced: ' + formatDateTimeDMY(now) + ' (' + response.data.length + ' records)');
                                         $('#lastUpdated').data('timestamp', response.timestamp);
                                         updateApiStatus('connected', 'Connected - ' + response.data.length + ' records');
                                         btn.prop('disabled', false).html('<i class="fas fa-sync-alt"></i> Refresh');
@@ -2339,10 +2618,9 @@
             $('#resetBtn').on('click', function() {
                 $('.form-select-custom').val('').removeClass('has-value');
                 $('.form-control-custom').val('');
-                $('input[type="date"]').val('').removeClass('has-value');
+                $('.js-date').each(function() { clearDatePicker(this); });
                 $('#searchInput').val('');
                 $('.column-filter').val('');
-                $('.column-filter-date input').val('');
                 // Reset TypeOfSubmission to default (syncs chip box + in-table)
                 selectedTypeOfSubmissions = [...defaultSelectedTypes];
                 syncTypeFilterUI();
@@ -2376,15 +2654,18 @@
             $('#downloadBtn').on('click', function() {
                 const filteredData = table.rows({ search: 'applied' }).data().toArray();
 
-                // Date fields rendered as dd.mm.yyyy in export
+                // Date fields are exported as real Excel dates shown as dd.mm.yyyy,
+                // so they still sort and filter as dates inside Excel.
                 const dateFields = new Set(['BRREG', 'DateOfReceive', 'd_check_in', 'd_spr_out', 'PUB', 'PUB2', 'PUB3']);
+                const EXCEL_DATE_FORMAT = 'dd.mm.yyyy';
 
+                // ISO date -> Excel serial day number (timezone independent)
                 function fmtExportDate(data) {
                     if (!data) return '';
                     var s = String(data).substring(0, 10);
                     var p = s.split('-');
-                    if (p.length === 3) return p[2] + '.' + p[1] + '.' + p[0];
-                    return s;
+                    if (p.length !== 3) return s;
+                    return (Date.UTC(+p[0], +p[1] - 1, +p[2]) - Date.UTC(1899, 11, 30)) / 86400000;
                 }
 
                 // Only export currently visible columns, in their current order
@@ -2418,6 +2699,16 @@
                 });
 
                 const ws = XLSX.utils.json_to_sheet(exportData);
+                visibleCols.forEach(function(item, c) {
+                    if (!dateFields.has(item.col.data)) return;
+                    for (var r = 1; r <= exportData.length; r++) {
+                        var cell = ws[XLSX.utils.encode_cell({ r: r, c: c })];
+                        if (cell && cell.t === 'n') {
+                            cell.z = EXCEL_DATE_FORMAT;
+                            delete cell.w;  // drop cached text so the date format is used
+                        }
+                    }
+                });
                 const wb = XLSX.utils.book_new();
                 XLSX.utils.book_append_sheet(wb, ws, "Notice Data");
 
