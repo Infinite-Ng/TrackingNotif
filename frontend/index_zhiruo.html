@@ -1467,9 +1467,9 @@
 
             // ==========================================
             // Load data from local cache on page open (instant)
-            // The backend refresh thread keeps cached_data.json up to date
-            // every 10 minutes. Use the Refresh button to pull fresh data
-            // from the API on demand.
+            // The table is shown from the cache first, then a refresh is
+            // triggered (same as clicking Refresh) so the user gets fresh data.
+            // Without user activity the backend refreshes once a day.
             // ==========================================
             function loadDataFromCache() {
                 showLoading(true, 'Loading data...');
@@ -1504,6 +1504,10 @@
                         updateApiStatus('error', 'No cached data available');
                         $('#lastUpdated').html('<span style="color:red">No data available. Click Refresh to fetch from server.</span>');
                         initTable([]);
+                    },
+                    complete: function() {
+                        // Fetch fresh data on page open (skipped if the data is < 1 min old)
+                        $('#refreshBtn').trigger('click');
                     }
                 });
             }
@@ -2544,10 +2548,14 @@
                     url: API_BASE_URL + '/api/refresh',
                     method: 'POST',
                     timeout: 5000,
-                    error: function() {
-                        // Trigger still scheduled; proceed anyway
+                    error: function(xhr) {
+                        // Server not reachable: keep the cached data on screen and stop here
+                        // instead of polling for minutes. status 0 = network / certificate error.
+                        if (xhr.status === 0) $('#certTrustBanner').addClass('active');
+                        btn.prop('disabled', false).html('<i class="fas fa-sync-alt"></i> Refresh');
+                        updateApiStatus('error', 'Server not reachable – showing cached data');
                     },
-                    complete: function() {
+                    success: function() {
                         // Poll /api/data until the timestamp is within 1 minute
                         var attempts = 0;
                         var maxAttempts = 20; // ~60 seconds max (20 * 3s)
