@@ -1,111 +1,234 @@
 # ITU Space Services — Notice Tracking System
 
-## Documentation (English)
+Documentation (English) · Chinese version: [TrackingNotif_Documentation_CN.md](TrackingNotif_Documentation_CN.md)
+
+*Last updated: 16 October 2026*
 
 ---
 
-## 1. Product Overview
+## Contents
 
-The **Notice Tracking System** is an internal web application for the ITU Space Services Department. It provides a searchable, filterable, and exportable view of space-network notice submissions retrieved from two internal databases:
-
-| Source | Type | Connection |
-|--------|------|-----------|
-| `sntrdat.mdb` | MS Access (read-only) | `M:\BR_DATA\SPACE\SNTRACK\sntrdat.mdb` |
-| `SpaceNetworkSystem` | SQL Server | `sydney.itu.int` |
-
-The frontend is a single-page HTML/JavaScript application served by a Flask backend over HTTPS.
+1. [Overview](#1-overview)
+2. [Architecture](#2-architecture)
+3. [Data Sources and Merge Rules](#3-data-sources-and-merge-rules)
+4. [Data Refresh and Caching](#4-data-refresh-and-caching)
+5. [First-Time Setup (per browser)](#5-first-time-setup-per-browser)
+6. [User Guide](#6-user-guide)
+7. [Notice Detail Popup and SRS Statistics](#7-notice-detail-popup-and-srs-statistics)
+8. [API Reference](#8-api-reference)
+9. [Repository Layout](#9-repository-layout)
+10. [Operations Guide](#10-operations-guide)
+11. [Troubleshooting](#11-troubleshooting)
+12. [Known Issues and Future Work](#12-known-issues-and-future-work)
+13. [Change Log](#13-change-log)
 
 ---
 
-## 2. System Architecture
+## 1. Overview
+
+The **Notice Tracking System** is an internal web application for the ITU Space Services Department. It shows space-station notices in one searchable, filterable and exportable table, combining data from three internal databases:
+
+| Source | Database | What it provides |
+|--------|----------|------------------|
+| **SNTrack** | MS Access `sntrdat.mdb` | BR tracking data (BRReg date, ADM, CIRC/pub, remarks, …) |
+| **e-submission** | SQL Server `SpaceNetworkSystem` on `sydney.itu.int` | Submission data (SatName, DateOfReceive, TypeOfSubmission, Status, …) |
+| **SRS** | MS Access `srs_all.mdb` | ESIM resolution flags (Res156/169/123) and the coordination details in the row popup |
+
+All databases are opened **read-only**; the system never writes to them.
+
+| Item | Value |
+|------|-------|
+| User URL | `https://intweb.itu.int/ITU-R/space/css/notification/index_api.html` |
+| Backend server | `156.106.168.185`, HTTPS port `5001` |
+| Frontend files (IIS share) | `\\intweb.itu.int\intwebroot\ITU-R\space\css\notification\` |
+| Git repository | `https://github.com/Infinite-Ng/TrackingNotif.git` (branch `main`) |
+
+---
+
+## 2. Architecture
 
 ```
-Browser (user)
-    │
-    │  HTTPS (port 5001)
-    ▼
-Flask backend (api.py)
-    │  156.106.168.185:5001
-    │
-    ├── /api/data        → returns notice records as JSON
-    ├── /api/health      → health check endpoint
-    ├── /api/refresh     → forces a fresh data fetch
-    └── /                → serves index_api.html (frontend)
-         └── /data/cached_data.json  → offline backup cache
+ Browser
+   │  1. page + cached data          https://intweb.itu.int/.../notification/
+   │◄───────────────────────────────  IIS (static files)
+   │                                    ├── index_api.html
+   │                                    └── data/cached_data.json  ◄──┐ written after
+   │                                                                  │ every refresh
+   │  2. /api/refresh, /api/data,     https://156.106.168.185:5001    │
+   │     /api/details/<ntc_id>        Flask backend (backend/api.py) ─┘
+   └─────────────────────────────────►  ├── in-memory cache + background refresher
+                                        ├── SNTrack  (sntrdat.mdb, local copy)
+                                        ├── e-submission (SQL Server)
+                                        └── SRS      (srs_all.mdb)
 ```
 
-**Two access methods for the frontend:**
+**What happens when a user opens the page:**
 
-| Method | URL | Notes |
-|--------|-----|-------|
-| Via Flask (recommended) | `https://156.106.168.185:5001/` | Served directly by backend |
-| Via IIS file share | `\\intweb.itu.int\intwebroot\ITU-R\space\css\notification\index_api.html` | Static HTML file; JavaScript automatically points to `https://156.106.168.185:5001` for API calls |
+1. The page loads `data/cached_data.json` from IIS and shows the table immediately.
+2. It then triggers a refresh, exactly like clicking **Refresh** (see [Section 4](#4-data-refresh-and-caching)).
+3. When the backend has re-queried the databases, the table is updated in place.
 
----
+**Components:**
 
-## 3. First-Time Setup (per browser)
+| Component | File | Role |
+|-----------|------|------|
+| Frontend | `frontend/index_api.html` | Single-page app (jQuery, DataTables, Bootstrap, flatpickr, SheetJS). Deployed by copying to the IIS share. |
+| Backend | `backend/api.py` | Flask API: queries and merges the databases, keeps an in-memory cache, writes `cached_data.json`. |
+| IIS config | `web.config` (on the share only) | Contains a reverse-proxy rule `api/*` → `http://156.106.168.185:5000`. **Currently not working** — see [Section 12](#12-known-issues-and-future-work). |
 
-Because the backend uses a **self-signed SSL certificate**, browsers will block the API connection until the certificate is trusted.
-
-**Steps:**
-1. Open `https://156.106.168.185:5001/api/health` in your browser.
-2. Click **Advanced → Proceed to 156.106.168.185 (unsafe)** (or equivalent for your browser).
-3. You will see a plain JSON response `{"status": "ok"}` — this confirms the certificate is trusted.
-4. Return to the tracking page and reload it.
-
-You only need to do this once per browser. The certificate is valid for 10 years.
+The backend can also serve the frontend itself at `https://156.106.168.185:5001/` (from `frontend/`). In that case the page uses its own origin for API calls; from any other origin it uses the hard-coded `BACKEND_URL` (`https://156.106.168.185:5001`).
 
 ---
 
-## 4. User Guide
+## 3. Data Sources and Merge Rules
 
-### 4.1 Opening the Application
+### 3.1 Sources and join keys
 
-- **Preferred:** Navigate to `https://156.106.168.185:5001/` in Chrome or Edge.
-- **Alternate:** Open `\\intweb.itu.int\intwebroot\ITU-R\space\css\notification\index_api.html` from Windows Explorer.
+| Source | Location | Tables used | Join key |
+|--------|----------|-------------|----------|
+| SNTrack | `\\blue\dfs\br\BR_DATA\SPACE\SNTRACK\sntrdat.mdb` (+ `sntrapp.mdw` workgroup file) | `tblSpaceStnNotif` | `ntc_id` |
+| e-submission | SQL Server `sydney.itu.int` / `SpaceNetworkSystem` | `res908.Res908`; Status from `dbo.Submissions` + `dbo.SubmissionsStatus` via `SubmissionId` | `SnsNtcId` = `ntc_id` |
+| SRS | `\\blue\dfs\br\BR_DATA\SPACE\SRS_DB\srs_all.mdb` | `notice`, `grp`, `e_srvcls`, `provn`, `tr_aff_ntw`, `coord_agree_ntw`, `all_aff_ntw`, `grp_aff_rec` | `ntc_id` |
 
-On first load the page fetches live data from the backend. If the backend is unreachable, a **yellow banner** will appear showing the timestamp of the last successful fetch, and the table will be populated from the offline backup cache (`frontend/data/cached_data.json`).
+The SNTrack MDB is **copied to a local folder** (`LOCAL_DATA_DIR` in `api.py`) at the start of each refresh and queried from there, so a locked network file never blocks the backend. If the copy fails, the previous local copy is used.
 
-### 4.2 Filtering Data
+### 3.2 Which field comes from where
 
-**Top filter bar (main filters):**
+- **SNTrack:** BRREG, 2d_date, ADM, PHASE, tgt_ntc_id, 11.32A, 11.41, subtoc, SUP, d_val_in, d_check_in, d_spr_out, d_complete, d_wmeeting, CIRC/pub, CIRC2/pub2, CIRC3/pub3, remarks, tex_remarks
+- **e-submission:** DateOfReceive, SatName, long_nom, ntwk_org, act_code, TypeOfSubmission, Status, SNTrack ID (`sntrack_id`), SubmissionId, InternalReference, DocumentumReference
+- **SRS:** Res156 / Res169 / Res123 (rules in [ESIM_RES_Classification.md](ESIM_RES_Classification.md)) and the SRS section of the row popup ([Section 7](#7-notice-detail-popup-and-srs-statistics)).
+
+BRREG (SNTrack) and DateOfReceive (e-submission) mean the same thing but can differ, e.g. when a submission was returned.
+
+### 3.3 Merge rules (`fetch_data()` in `api.py`)
+
+The merge is a full outer join on `ntc_id`:
+
+| Case | Rule |
+|------|------|
+| Notice in SNTrack (with or without e-submission match) | **Always kept.** If it has no e-submission TypeOfSubmission, it is labelled `NotificationOfSpaceStation`. |
+| Notice only in e-submission, TypeOfSubmission = `NotificationOfEarthStation` | **Dropped** (the system tracks space stations only). |
+| Notice only in e-submission, other types | Kept **only if** it has a `sntrack_id` **or** a non-empty Status. |
+| Several e-submission rows with the same `SnsNtcId` (e.g. placeholder `1`) | All rows are kept. |
+
+---
+
+## 4. Data Refresh and Caching
+
+### 4.1 When data is refreshed
+
+| Trigger | What happens |
+|---------|--------------|
+| **User opens the page** | Cached data is shown first, then a refresh is requested automatically. |
+| **User clicks Refresh** | A refresh is requested. |
+| **No user activity** | The backend refreshes on its own **once a day** (`REFRESH_INTERVAL_SECONDS`, default `86400`). |
+| **Backend start-up** | If the cache file is older than 5 minutes (or missing), a refresh runs immediately. |
+
+To protect the databases, the page **skips** the refresh when the data on screen is less than 1 minute old. On the backend, requests that arrive while a refresh is running are merged: at most one more refresh is queued.
+
+### 4.2 Refresh sequence
+
+1. The page sends `POST /api/refresh`. The backend answers immediately (`202`) and wakes the background refresher thread.
+2. The refresher syncs the SNTrack MDB, queries all three databases, merges the data and stores it in memory. A full refresh takes about **20 seconds**.
+3. Meanwhile the page polls `GET /api/data` every 3 seconds (max. 20 attempts). As soon as the returned `timestamp` is less than 1 minute old, the table is updated and shows **"Synced: dd.mm.yyyy HH:MM:SS"**.
+4. If `POST /api/refresh` fails (backend down, certificate not trusted), the page **stops immediately**, keeps the cached data and shows *"Server not reachable – showing cached data"* in the status indicator (visible in Dev Mode).
+
+`/api/data` never queries the databases directly. It always returns the in-memory cache, so it answers instantly even when a database is slow.
+
+### 4.3 Cache files
+
+After every successful refresh the backend writes the same JSON to two places:
+
+| File | Used by |
+|------|---------|
+| `TrackingNotif/frontend/data/cached_data.json` | Backend start-up (loaded into memory), and the Flask-served page |
+| `\\intweb.itu.int\intwebroot\ITU-R\space\css\notification\data\cached_data.json` | The IIS-served page (first thing it loads) |
+
+```json
+{ "generated_at": "2026-10-16T17:17:08.792043+00:00", "data": [ ... ] }
+```
+
+Files are written **atomically**: first to `cached_data.json.tmp`, then swapped in with `os.replace()`. A browser reading the file during a refresh therefore always gets a complete file. (Before October 2026 the file was overwritten in place, which could make the page show no data.)
+
+If a refresh fails, the previous data stays in memory and in the files; `/api/data` then returns `"stale": true`.
+
+---
+
+## 5. First-Time Setup (per browser)
+
+The backend uses a **self-signed certificate**. Until a browser trusts it, the page still shows the cached data, but **Refresh** and the SRS part of the row popup cannot reach the backend.
+
+1. Open `https://156.106.168.185:5001/api/health`.
+2. Click **Advanced → Proceed to 156.106.168.185 (unsafe)** (wording depends on the browser).
+3. You should see `{"status": "healthy", "timestamp": "..."}`.
+4. Go back to the tracking page and reload it.
+
+This is needed once per browser, and again whenever the certificate is regenerated (last regenerated: **16 October 2026**). With **Dev Mode** on, the page shows a yellow banner with this link when the certificate is not trusted.
+
+---
+
+## 6. User Guide
+
+### 6.1 Opening the application
+
+Open `https://intweb.itu.int/ITU-R/space/css/notification/index_api.html` in Chrome or Edge.
+
+Do **not** open the HTML file directly from Windows Explorer (`file://`): the browser blocks loading `cached_data.json` that way and the table stays empty.
+
+The line next to "Data Preview" shows how current the data is:
+
+| Text | Meaning |
+|------|---------|
+| `Generated: <date time> (N records)` | Data from the cache file, generated at that time |
+| `Synced: <date time> (N records)` | Fresh data just received from the backend |
+
+### 6.2 Filters
+
+**Top filter bar:**
 
 | Control | Description |
 |---------|-------------|
-| **Type of Submission** (chip selector) | Multi-select filter. Default: *NotifSS* and *ResubSS*. Click the box to open the dropdown. Click a chip's **×** to remove it. Click the right-side **×** to clear all. |
-| **Status** | Single-select dropdown. Filters by current notice status. |
-| **BRReg date range** | Date range filter on the BR registration date column. |
+| **Type of Submission** (chips) | Multi-select. Default: *NotifSS* and *ResubSS*. Click the box to open the list; click a chip's **×** to remove it; the right-hand **×** clears all. |
+| **Status** (chips) | Multi-select, same behaviour. Default: all statuses. |
+| **BRReg date range** | From / To date pickers (dd.mm.yyyy). Both ends are inclusive. |
 
-**In-table column filters (in the table header row):**
-Each column has its own filter input directly below the column header. Text columns support substring search; date columns have a date picker; TypeOfSubmission and Status have multi-select checkboxes.
+**Column filters** (second header row): text columns support substring search; date columns have From/To pickers; ADM, TypeOfSubmission, Status and SUP have multi-select lists; flag columns (11.32A, subtoc, Res156, …) have drop-downs. The top-bar and in-table TypeOfSubmission/Status filters stay in sync.
 
-### 4.3 Searching
+### 6.3 Search
 
-Use the **Search** box (top right) for a global text search across all visible columns.
+The **Search** box searches all visible columns. Dates can be searched in either form, e.g. `23.02.2025` or `2025-02-23`.
 
-### 4.4 Refreshing Data
+### 6.4 Refresh
 
-Click the **Refresh** button to fetch the latest data from the backend databases. This triggers a full re-query of both the Access MDB and SQL Server. Progress is shown by a loading overlay.
+Click **Refresh** to load the latest data (about 20 seconds). The button shows *Refreshing…* until the new data arrives. If the data is less than 1 minute old, nothing is done.
 
-### 4.5 Resetting Filters
+### 6.5 Reset
 
-Click the **Reset** button to restore all filters to their defaults:
-- TypeOfSubmission → NotifSS + ResubSS
-- All other filters → cleared / set to "All"
+**Reset** restores all filters: TypeOfSubmission → NotifSS + ResubSS; everything else → cleared / "All".
 
-### 4.6 Exporting Data
+### 6.6 Export
 
-Click the **Export** button to download the currently **visible/filtered** rows as an Excel (`.xlsx`) file.
+**Export** downloads the currently **filtered rows and visible columns** as `notice_report_YYYYMMDD.xlsx`. Date columns are real Excel dates formatted `dd.mm.yyyy`, so they still sort and filter as dates in Excel.
 
-### 4.7 Column Visibility
+### 6.7 Column visibility
 
-Use the column chip toggles at the top of the page to show or hide individual columns. Click **Apply** to apply changes. Column settings are saved in browser `localStorage` and restored on next visit. Click **Reset** (next to Apply) to clear saved settings and restore defaults.
+Use the column chips at the top to show or hide columns, then click **Apply**. Settings are stored in the browser (`localStorage`). **Reset** (next to Apply) restores the default columns.
 
----
+### 6.8 Dates
 
-## 5. TypeOfSubmission Values
+All dates are shown as **dd.mm.yyyy** (e.g. `07.10.2026`), in the table, the popup, the date pickers and the export. Internally, sorting and filtering use ISO dates (`yyyy-mm-dd`).
 
-| Short Name | Full Name |
+### 6.9 Row details
+
+Click any row to open the notice detail popup ([Section 7](#7-notice-detail-popup-and-srs-statistics)).
+
+### 6.10 Dev Mode
+
+The **Dev Mode** switch (top right) shows the API status indicator and, when needed, the certificate banner. The setting is remembered per browser.
+
+### 6.11 TypeOfSubmission short names
+
+| Short name | Full name |
 |------------|-----------|
 | NotifSS | NotificationOfSpaceStation |
 | ResubSS | Resubmission |
@@ -119,176 +242,243 @@ Use the column chip toggles at the top of the page to show or hide individual co
 
 ---
 
-## 6. Offline / Backup Cache
+## 7. Notice Detail Popup and SRS Statistics
 
-After every successful data fetch the backend writes a backup file:
+Clicking a row opens a popup with three sections, grouped by data source:
 
+| Section | Content | Source |
+|---------|---------|--------|
+| SNTrack | All SNTrack fields of the row | Already in the table data |
+| e-submission | All e-submission fields of the row | Already in the table data |
+| SRS | Res156/169/123, `prov`, `ntf_occurs`, `prov_desc`, coordination statistics from `provn` and `tr_aff_ntw`, row counts of `coord_agree_ntw` and `all_aff_ntw` | Queried live: `GET /api/details/<ntc_id>` |
+
+Empty values are shown as blank fields. A notice that is not (yet) in SRS — typically a new submission — shows *"Notice not found in SRS database."*
+
+### 7.1 How SRS tables link to a notice
+
+| Table | Link |
+|-------|------|
+| `notice` | `ntc_id` |
+| `provn` | `grp_id` → `grp.ntc_id` (provn has no `ntc_id` column) |
+| `tr_aff_ntw` | `ntc_id` |
+| `coord_agree_ntw` | `ntc_id` |
+| `all_aff_ntw` | `aff_rec_id` → `grp_aff_rec.grp_id` → `grp.ntc_id` (**rule pending confirmation**) |
+
+### 7.2 Statistics rules
+
+Based on Wu's e-mail "The coord_st statistics result" (24 February 2026). `provn` and `tr_aff_ntw` use the same rules. Administrations are **de-duplicated** by `adm` (an adm on many rows counts once); rows with an empty `adm` are not counted.
+
+| Popup field | Meaning | Reference Excel column |
+|-------------|---------|------------------------|
+| agree_st | Per symbol: number and list of distinct adm | symbol O = J `agree_st_o_count` / L `agree_st_o_adm_list` |
+| coord_st | Per symbol: number and list of distinct adm | symbol O = K `coord_st_o_count` / O `coord_st_o_adm_list` |
+| coord_st details | adm lists grouped by coord_st symbol, then by agree_st value | symbol O = N `coord_st_o_details` |
+| coord_prov | Distinct coord_prov values | provn = M `coord_prov_values`; tr_aff_ntw = Q `tr_aff_ntw_coord_prov` |
+| has data (tr_aff_ntw only) | Whether the notice has rows in the table | P `info in tr_aff_ntw_data` |
+| coord_agree_ntw | Row count (table has no primary key; no de-duplication) | — |
+| all_aff_ntw | Count of distinct `aff_rec_id` | — |
+
+`tr_aff_ntw` is cleared after the coordination wizard has run, so most notices have no data there; this is normal.
+
+### 7.3 Checking against the reference Excel
+
+`tools/compare_coord_stats.py` compares columns J–Q of the reference workbook notice by notice (read-only):
+
+```bat
+tracking_env_32\python.exe tools\compare_coord_stats.py coord_st_statistics_part1.xlsx result.csv
+tracking_env_32\python.exe tools\compare_coord_stats.py coord_st_statistics_part1.xlsx result.csv --source-mdb
 ```
-TrackingNotif/frontend/data/cached_data.json
-```
 
-Format:
-```json
-{
-  "generated_at": "2025-01-15T09:30:00.000000",
-  "data": [ ... ]
-}
-```
-
-If the backend is unavailable, the frontend automatically falls back to this file and displays an **orange banner** with the cache timestamp. The table is fully functional (filtering, export, search) with cached data.
+- Without options: queries `srs_all.mdb` (the data the popup uses).
+- `--source-mdb`: reads each administration's submitted MDB (Excel column `mdb_file`) instead — the workbook's own source — to check the counting logic independently.
+- Differences between the two are expected: BR processing changes the data (e.g. an adm with coord_st = 'O' at submission becomes agree_st = 'O' in SRS; coord_prov prefix `X/` becomes `11.41/`; tr_aff_ntw is cleared).
 
 ---
 
-## 7. Maintenance Guide
+## 8. API Reference
 
-### 7.1 Starting the Backend
+Base URL: `https://156.106.168.185:5001`
 
-On the server (`156.106.168.185`):
+| Method | Path | Rate-limited | Description |
+|--------|------|:---:|-------------|
+| GET | `/api/data` | ✓ | Returns the in-memory cache: `{success, count, timestamp, stale, data}`. `503` until the first data has been loaded. |
+| POST / GET | `/api/refresh` | ✓ | Schedules a background refresh; returns `202` immediately with `current_timestamp`. |
+| GET | `/api/details/<ntc_id>` | ✓ | SRS fields for one notice (popup). `400` if `ntc_id` is not numeric, `503` if `srs_all.mdb` is unreachable, `500` on query error. |
+| GET | `/api/health` | — | `{"status": "healthy", "timestamp": ...}` |
+| GET | `/`, `/index_api.html`, `/<file>` | — | Serves files from `frontend/`. |
 
-```bat
-cd C:\path\to\TrackingNotif\backend
-python api.py
+**Rate limit:** 30 requests per 60 seconds per client IP (in memory), shared by all rate-limited endpoints. Exceeding it returns `429`. One page-open refresh uses about 1 + 7 requests.
+
+**CORS:** allowed origins are the backend itself (`http(s)://156.106.168.185:5001`, `localhost:5001`, `127.0.0.1:5001`), `http(s)://intweb.itu.int` and `null` (`file://`). Add more with `FRONTEND_ORIGIN` (comma-separated).
+
+---
+
+## 9. Repository Layout
+
+```
+TrackingNotif/
+├── backend/
+│   ├── api.py                 Flask backend (all server logic)
+│   ├── start_api.bat          Start script (admin, firewall rule, M: drive, python api.py)
+│   ├── generate_cert.py       Creates cert.pem / key.pem (self-signed, 10 years)
+│   ├── requirements.txt       Python dependencies
+│   ├── .flaskenv.example      Template for .flaskenv (settings and credentials)
+│   └── .flaskenv, *.pem, *.log   Local only, git-ignored
+├── frontend/
+│   ├── index_api.html         Main page (deployed to IIS as index_api.html)
+│   ├── index_zhiruo.html      Development copy of the main page (same content)
+│   ├── index.html, index_tracking.html   Legacy pages reading static data/data.json
+│   └── data/                  cached_data.json (git-ignored), data.json (legacy)
+├── tools/compare_coord_stats.py   SRS statistics check against the reference Excel
+├── dataTransfer/, auto_update_data.bat   Legacy static-JSON export (not used by index_api.html)
+└── docs/                      This documentation, ESIM_RES_Classification.md
 ```
 
-Or use the provided batch script:
+On the IIS share, `index_api_.html` is a backup of the page **before** the October 2026 changes (US date format, no popup).
+
+---
+
+## 10. Operations Guide
+
+### 10.1 Configuration (`backend/.flaskenv`)
+
+Copy `backend/.flaskenv.example` to `backend/.flaskenv` and fill in the values. `.flaskenv` is git-ignored and must never be committed. **Passwords have no default** — if one is missing, the backend starts but logs a warning and the related database connection fails.
+
+| Variable | Required | Default | Description |
+|----------|:---:|---------|-------------|
+| `SQL_SERVER_PASSWORD` | ✓ | — | SQL Server password |
+| `MDB_PASSWORD` | ✓ | — | SNTrack MDB password |
+| `SQL_SERVER_HOST` | | `sydney.itu.int` | SQL Server host |
+| `SQL_SERVER_DB` | | `SpaceNetworkSystem` | SQL Server database |
+| `SQL_SERVER_USER` | | `sns_a` | SQL Server user |
+| `MDB_USER` | | `spruser01` | SNTrack MDB user |
+| `SRS_MDB_PATH` | | `\\blue\dfs\br\BR_DATA\SPACE\SRS_DB\srs_all.mdb` | SRS database |
+| `REFRESH_INTERVAL_SECONDS` | | `86400` (1 day) | Automatic refresh interval |
+| `FRONTEND_ORIGIN` | | — | Extra CORS origins, comma-separated |
+
+Paths that are still hard-coded in `api.py`: `LOCAL_DATA_DIR` (local MDB copy), the network MDB/MDW paths, and the IIS cache path in `_write_cache_files()`.
+
+### 10.2 Python environment and dependencies
+
+- Use a Python environment that has `backend/requirements.txt` installed (`flask`, `flask-cors`, `pyodbc`, `python-dotenv`, `waitress`). On the current server this is the conda env `C:\Users\xianwu\Anaconda3\envs\codingSpace`.
+- `generate_cert.py` also needs `cryptography`, which is **not** in `requirements.txt` and not in that env; the base Anaconda Python (`C:\Users\xianwu\Anaconda3\python.exe`) has it.
+- The **Microsoft Access Database Engine** (ODBC driver) must be installed, with the same bitness (32/64-bit) as Python.
+
+### 10.3 Starting the backend
+
+The backend **must run over HTTPS on port 5001**, because the page calls `https://156.106.168.185:5001`.
 
 ```bat
-TrackingNotif\backend\start_api.bat
+cd C:\Users\xianwu\Desktop\codingSpace\TrackingNotif\backend
+C:\Users\xianwu\Anaconda3\envs\codingSpace\python.exe api.py
 ```
 
-The server starts on `https://0.0.0.0:5001` and listens on all network interfaces.
+`python api.py` uses `cert.pem` / `key.pem` when both exist and are valid. `start_api.bat` does the same and also elevates to administrator, adds the firewall rule for port 5001, kills any process already on port 5001 and maps `M:`; note that it calls plain `python`, so make sure that resolves to the right environment.
 
-### 7.2 Stopping the Backend
+> ⚠️ **Do not** start it with `waitress --listen=0.0.0.0:5001`. Waitress serves plain HTTP only; the page's HTTPS requests then hang and never reach the backend. Waitress is only suitable behind an HTTPS reverse proxy (see [Section 12](#12-known-issues-and-future-work)).
 
-Press `Ctrl+C` in the terminal running `api.py`.
-
-If the process was left running in the background and port 5001 is in use:
+To run it in the background with a log file (as on the server since 16 Oct 2026):
 
 ```powershell
-# Find the PID using port 5001
+$b = 'C:\Users\xianwu\Desktop\codingSpace\TrackingNotif\backend'
+Start-Process -FilePath 'C:\Users\xianwu\Anaconda3\envs\codingSpace\python.exe' -ArgumentList 'api.py' `
+  -WorkingDirectory $b -WindowStyle Hidden `
+  -RedirectStandardOutput "$b\api_server.out.log" -RedirectStandardError "$b\api_server.log"
+```
+
+A background process stops when the machine restarts or the user logs off; start it again after a reboot.
+
+### 10.4 Checking and stopping the backend
+
+```powershell
+# Is it up, and is it HTTPS?  (-k = accept the self-signed certificate)
+curl.exe -k https://156.106.168.185:5001/api/health
+
+# Which process holds port 5001, and how was it started?
 netstat -ano | findstr :5001
-# Kill the process
+Get-CimInstance Win32_Process -Filter "ProcessId=<PID>" | Select-Object CommandLine
+
+# Stop it
 taskkill /PID <PID> /F
 ```
 
-### 7.3 Verifying the Backend Is Running
+The log (`backend\api_server.log`) shows every request and each refresh, e.g. `POST /api/refresh … 202` and `Background refresh complete: 21023 records`.
 
-```powershell
-Invoke-WebRequest -Uri "https://156.106.168.185:5001/api/health" -SkipCertificateCheck
-```
+### 10.5 SSL certificate
 
-Expected response: `{"status": "ok"}`
-
-### 7.4 SSL Certificate
-
-The self-signed certificate files are located at:
-
-```
-TrackingNotif/backend/cert.pem
-TrackingNotif/backend/key.pem
-```
-
-The certificate covers:
-- IP: `156.106.168.185`
-- `localhost`
-- `127.0.0.1`
-- Valid for **10 years**
-
-To regenerate the certificate (when it expires or the server IP changes):
+Files: `backend/cert.pem` and `backend/key.pem` (git-ignored). The certificate covers `156.106.168.185`, `localhost` and `127.0.0.1`, valid for 10 years. `key.pem` is unencrypted — restrict its file permissions.
 
 ```bat
-cd TrackingNotif\backend
-python generate_cert.py
+cd C:\Users\xianwu\Desktop\codingSpace\TrackingNotif\backend
+C:\Users\xianwu\Anaconda3\python.exe generate_cert.py
 ```
 
-After regeneration, users must re-trust the certificate in their browsers (see Section 3).
+Then restart the backend. **After regenerating, every user must trust the certificate again** ([Section 5](#5-first-time-setup-per-browser)).
 
-### 7.5 Updating the Backend IP
+### 10.6 Deploying frontend changes
 
-If the server IP changes, update the following:
+1. Edit and test `frontend/index_api.html` in the repository.
+2. Back up the live file on the share, then copy the new one over it:
+   `\\intweb.itu.int\intwebroot\ITU-R\space\css\notification\index_api.html`
+3. Ask users to reload the page (Ctrl+F5 if the browser cached the old version).
+4. Commit the same file to Git so the repository matches what is deployed.
 
-1. Regenerate the SSL certificate for the new IP (see 7.4).
-2. In `TrackingNotif/frontend/index_api.html` and `TrackingNotif_edited/frontend/index_api.html`, update:
-   ```javascript
-   const BACKEND_URL = 'https://<NEW_IP>:5001';
-   ```
-3. Update the cert-trust banner link in the HTML:
-   ```html
-   <a href="https://<NEW_IP>:5001/api/health" ...>
-   ```
+Backend changes (`api.py`) only take effect after restarting the backend.
 
-### 7.6 Data Source Configuration
+### 10.7 Changing the server IP
 
-Database connection settings are in `TrackingNotif/backend/api.py`. **Credentials can now be set via environment variables** (recommended for security), with hardcoded fallback values:
+1. Regenerate the certificate for the new IP (edit the IP in `generate_cert.py` first).
+2. In `frontend/index_api.html`, update `const BACKEND_URL = 'https://<NEW_IP>:5001';` and the link in the certificate banner.
+3. Update the origins in `_ALLOWED_ORIGINS` in `api.py`, and the target in `web.config` if the proxy is used.
+4. Restart the backend, redeploy the page, and have users trust the new certificate.
 
-| Environment Variable | Description | Fallback Default |
-|----------------------|-------------|------------------|
-| `MDB_USER` | MS Access username | `spruser01` |
-| `MDB_PASSWORD` | MS Access password | `spruser01` |
-| `SQL_SERVER_USER` | SQL Server username | `sns_a` |
-| `SQL_SERVER_PASSWORD` | SQL Server password | `sns_a_5678` |
-| `SQL_SERVER_HOST` | SQL Server hostname | `sydney.itu.int` |
-| `SQL_SERVER_DB` | SQL Server database name | `SpaceNetworkSystem` |
+---
 
-All MDB connections use `ReadOnly=1` so the database can be opened simultaneously by multiple users without locking.
-
-### 7.7 CORS Configuration
-
-The backend restricts CORS (Cross-Origin Resource Sharing) to a known set of origins for security. When the frontend is served from a different origin (e.g., IIS at `https://intweb.itu.int`), the browser sends a cross-origin request that must be allowed.
-
-**Allowed origins (built-in):**
-- `https://156.106.168.185:5001` / `http://156.106.168.185:5001`
-- `https://localhost:5001` / `http://localhost:5001`
-- `https://127.0.0.1:5001` / `http://127.0.0.1:5001`
-- `https://intweb.itu.int` / `http://intweb.itu.int`
-- `null` (for `file://` access)
-
-**Adding additional origins:** Set the `FRONTEND_ORIGIN` environment variable with comma-separated URLs:
-```bat
-set FRONTEND_ORIGIN=https://example.com,https://another.example.com
-```
-
-If the frontend shows "Offline – using backup data" on other machines despite the backend running, this is likely a CORS issue — verify the accessing origin is in the allowed list.
-
-### 7.8 Security Configuration
-
-**Rate limiting:** The `/api/data` endpoint is rate-limited to **30 requests per 60 seconds** per client IP to prevent abuse.
-
-**SSL private key:** The file `backend/key.pem` is stored without encryption. On Windows, restrict NTFS permissions to Administrators only. On Linux, use `chmod 600 key.pem`.
-
-**Database credentials:** See Section 7.6 — use environment variables to avoid storing passwords in source code.
-
-### 7.9 Installing Dependencies
-
-```bat
-cd TrackingNotif\backend
-pip install -r requirements.txt
-```
-
-Key dependencies: `flask`, `pyodbc`, `cryptography`
-
-The MS Access driver must also be installed: **Microsoft Access Database Engine 2016 Redistributable** (64-bit).
-
-### 7.10 Troubleshooting
+## 11. Troubleshooting
 
 | Symptom | Likely cause | Fix |
 |---------|-------------|-----|
-| "Connection failed" banner in browser | Backend not running | Start `api.py` (Section 7.1) |
-| Certificate warning / blocked connection | Certificate not trusted | Follow Section 3 |
-| Table shows "Offline" with orange banner on other machines | CORS origin not allowed | Verify origin in allowed list (Section 7.7) or set `FRONTEND_ORIGIN` env var |
-| Table shows stale data with orange banner | Backend unreachable; cached data displayed | Check backend status |
-| Port 5001 already in use | Old process still running | Kill the old process (Section 7.2) |
-| No data after Refresh | Database path `M:\` not accessible | Verify drive mapping on the server machine |
-| Export button produces empty file | All rows filtered out | Reset filters first |
-| 429 Too Many Requests error | Rate limit exceeded | Wait and retry (limit: 30 req/min) |
+| Table is empty | Page opened from Explorer (`file://`) | Use the `https://intweb.itu.int/...` URL |
+| Table is empty (status "No cached data available") | `cached_data.json` missing or unreadable | Check the file on the share; run a refresh. (Half-written files can no longer occur since atomic writes.) |
+| Refresh does nothing; backend log shows no requests | Backend not running, or running as **plain HTTP** | `curl.exe -k https://156.106.168.185:5001/api/health`; if it fails, check the start command ([10.3](#103-starting-the-backend)) |
+| "Server not reachable – showing cached data" | Backend down, or this browser does not trust the certificate | Check the backend; follow [Section 5](#5-first-time-setup-per-browser) |
+| Backend crashes at start with `ssl.SSLError: [SSL] PEM lib` | `cert.pem` / `key.pem` empty or invalid | Regenerate the certificate ([10.5](#105-ssl-certificate)) |
+| Popup shows "Could not load SRS data" | Backend unreachable, or `srs_all.mdb` not reachable | Check the backend and the `\\blue` share |
+| Refresh shows "Refresh may be incomplete" / "Refresh timed out" | Refresh took longer than the polling window (~70 s) | Check the backend log for slow or failing database connections |
+| `429 Too Many Requests` | Rate limit (30 requests/min per IP) | Wait a minute |
+| Data does not change after refresh | A database connection failed; previous data kept (`stale: true`) | Check credentials in `.flaskenv` and the log |
+| Port 5001 already in use | Old process still running | Stop it ([10.4](#104-checking-and-stopping-the-backend)) |
+| Other machines show cached data only, backend is fine | CORS origin not allowed | Add the origin via `FRONTEND_ORIGIN` |
 
 ---
 
-## 8. Repository
+## 12. Known Issues and Future Work
 
-- **Git remote:** `https://github.com/Infinite-Ng/TrackingNotif.git`
-- **Main branch:** `main`
+- **Self-signed certificate friction.** Every user must trust the certificate once per browser. Better: route the API through IIS so the page calls its own site. `web.config` already has a rule `api/*` → `http://156.106.168.185:5000`, but it currently fails with **IIS error 500.50** (URL Rewrite, access denied) — most likely because the rule sets `HTTP_X_FORWARDED_HOST`, which is not in the server's allowed server variables. Fixing it needs an IIS administrator (or removing that `<serverVariables>` block), then running the backend with waitress over HTTP on port 5000 and pointing `BACKEND_URL` at the relative `api/` path.
+- **Backend is not a Windows service.** It stops on reboot/logoff. Consider a scheduled task at start-up or a service wrapper.
+- **Rule pending confirmation:** the `all_aff_ntw` link in the popup ([7.1](#71-how-srs-tables-link-to-a-notice)).
+- **Dead code:** `loadDataFromAPI()` in `index_api.html` is never called (it also references an undefined `filteredData`).
+- **Duplicate pages:** `index_api.html` and `index_zhiruo.html` are identical; keep them in sync or remove the copy.
+- **Hard-coded paths** in `api.py` (local data folder, IIS cache path) make moving the server harder.
+- `cryptography` is missing from `requirements.txt` (needed by `generate_cert.py`).
 
 ---
 
-*Last updated: June 2026*
+## 13. Change Log
+
+### October 2026
+
+- **Notice detail popup** (by xuzhiruo, PR #1): click a row to see all fields grouped by source, plus live SRS data via the new `/api/details/<ntc_id>` endpoint. New tool `tools/compare_coord_stats.py`.
+- **Dates as dd.mm.yyyy** everywhere (table, popup, pickers, timestamps); Excel export writes real dates.
+- **Refresh policy:** data is refreshed when a user opens the page or clicks Refresh; otherwise once a day (was every 10 minutes).
+- **Atomic cache writes:** `cached_data.json` is written to a temp file and swapped in, fixing an empty table when the page loaded during a refresh.
+- **Faster failure:** if the backend cannot be reached, the page stops at once and keeps the cached data, instead of polling for ~4 minutes.
+- **HTTPS restored:** `cert.pem` / `key.pem` had been empty since June 2026 and the backend had been started as plain HTTP, so refresh requests never reached it. The certificate was regenerated on 16 Oct 2026 and the backend restarted with `python api.py`.
+
+### Earlier (2026)
+
+- Show SNTrack-only space-station notices; exclude earth-station submissions.
+- Keep all e-submission rows that share a placeholder `SnsNtcId`.
+- In-memory cache with background refresher; disk cache loaded at start-up.
+- ESIM resolution classification (Res156/169/123) from SRS.
+- Credentials moved to environment variables; CORS restrictions; rate limiting.
