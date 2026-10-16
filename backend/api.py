@@ -748,13 +748,15 @@ def fetch_data():
 # Strategy:
 #   * On startup, load the latest cached_data.json into memory instantly.
 #   * /api/data ALWAYS returns whatever is in the in-memory cache, instantly.
-#   * A background thread refreshes every _REFRESH_INTERVAL seconds (default
-#     10 min) and also when /api/refresh is called. The refresh runs off the
+#   * A background thread refreshes when /api/refresh is called (on page open
+#     and on the Refresh button), otherwise once every _REFRESH_INTERVAL
+#     seconds (default 1 day). The refresh runs off the
 #     request path, so the caller is never blocked.
 # ============================================================================
 
-# Seconds between automatic background refreshes (default: 10 minutes).
-_REFRESH_INTERVAL = int(os.environ.get('REFRESH_INTERVAL_SECONDS', '600'))
+# Seconds between automatic background refreshes when nobody asks for one
+# (default: 1 day).
+_REFRESH_INTERVAL = int(os.environ.get('REFRESH_INTERVAL_SECONDS', '86400'))
 
 _cache_lock = threading.Lock()
 _cache = {
@@ -811,8 +813,12 @@ def _write_cache_files(cache_payload):
     for cache_path in cache_targets:
         try:
             os.makedirs(os.path.dirname(cache_path), exist_ok=True)
-            with open(cache_path, 'w', encoding='utf-8') as _cf:
+            # Write to a temp file, then swap it in, so a browser reading the
+            # file during a refresh never gets a half-written (invalid) JSON.
+            tmp_path = cache_path + '.tmp'
+            with open(tmp_path, 'w', encoding='utf-8') as _cf:
                 json.dump(cache_payload, _cf, ensure_ascii=False)
+            os.replace(tmp_path, cache_path)
             logger.info(f"Cache saved to {cache_path}")
         except Exception as _ce:
             logger.warning(f"Could not save cache to {cache_path}: {_ce}")
@@ -840,7 +846,7 @@ def _refresh_cache_once():
 
 
 def _background_refresher():
-    """Daemon loop: refreshes every _REFRESH_INTERVAL seconds (default 10 min)
+    """Daemon loop: refreshes every _REFRESH_INTERVAL seconds (default 1 day)
     and also whenever /api/refresh is called. On startup, the module-level code
     sets _refresh_now if the disk cache is older than 5 minutes, which triggers
     an immediate refresh on the first loop iteration."""
@@ -954,7 +960,7 @@ _refresher_thread = threading.Thread(
 _refresher_thread.start()
 
 # Startup freshness window (5 minutes). If the cached data is older than this,
-# schedule an immediate refresh so users don't see stale data for 10 minutes.
+# schedule an immediate refresh so users don't see stale data.
 _STARTUP_FRESH_SECONDS = 300
 with _cache_lock:
     _startup_generated_at = _cache['generated_at']

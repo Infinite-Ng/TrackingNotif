@@ -20,4 +20,4 @@ MDB_PASSWORD=
 # --- Optional ---
 # SRS_MDB_PATH=\\blue\dfs\br\BR_DATA\SPACE\SRS_DB\srs_all.mdb
 # FRONTEND_ORIGIN=https://intweb.itu.int
-# REFRESH_INTERVAL_SECONDS=300
+# REFRESH_INTERVAL_SECONDS=86400
