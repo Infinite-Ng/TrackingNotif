@@ -772,6 +772,30 @@
             color: #495057;
         }
 
+        .res35-groups {
+            max-height: 320px;
+            overflow: auto;
+            border: 1px solid #dee2e6;
+            border-radius: 3px;
+        }
+
+        #detailsModal table.res35-table {
+            font-size: 0.72rem;
+        }
+
+        #detailsModal .res35-table th {
+            position: sticky;
+            top: 0;
+            width: auto;
+            background: var(--header-bg);
+            color: #495057;
+            white-space: nowrap;
+        }
+
+        #detailsModal .res35-table td {
+            white-space: nowrap;
+        }
+
         .details-sub {
             margin-left: 24px;
         }
@@ -910,6 +934,7 @@
                             <th>Res156</th>
                             <th>Res169</th>
                             <th>Res123</th>
+                            <th>Res35</th>
                         </tr>
                         <tr class="column-filter-row">
                             <th></th><th></th><th></th><th></th><th></th><th></th>
@@ -917,6 +942,7 @@
                             <th></th><th></th><th></th><th></th><th></th><th></th>
                             <th></th><th></th><th></th><th></th><th></th><th></th>
                             <th></th><th></th><th></th><th></th><th></th><th></th>
+                            <th></th>
                         </tr>
                     </thead>
                     <tbody></tbody>
@@ -1094,7 +1120,8 @@
             { data: 'InternalReference', title: 'InternalReference' },
             { data: 'RES156', title: 'Res156', render: function(data) { return data ? 'Yes' : ''; }},
             { data: 'RES169', title: 'Res169', render: function(data) { return data ? 'Yes' : ''; }},
-            { data: 'RES123', title: 'Res123', render: function(data) { return data ? 'Yes' : ''; }}
+            { data: 'RES123', title: 'Res123', render: function(data) { return data ? 'Yes' : ''; }},
+            { data: 'RES35', title: 'Res35', defaultContent: '', render: function(data) { return data ? 'Yes' : ''; }}
         ];
 
         // Track column visibility (initialized inside $(document).ready via initColumnVisibility)
@@ -1169,7 +1196,7 @@
             var allData = [];
             
             // Column config version - increment when columns change
-            const COLUMN_CONFIG_VERSION = 4; // v4: added Res156/169/123 columns
+            const COLUMN_CONFIG_VERSION = 5; // v5: added Res35 column
 
             // Default column visibility: SNTrackID, ADM, SatName, long_nom, BRReg, DateOfReceive,
             // Notice ID, act_code, tgt_ntc_id, TypeOfSubmission, Status, 11.32A, 11.41, subtoc, Res156/169/123
@@ -1203,7 +1230,8 @@
                 false, // 26 InternalReference
                 true,  // 27 Res156
                 true,  // 28 Res169
-                true   // 29 Res123
+                true,  // 29 Res123
+                true   // 30 Res35 (grp_res35)
             ];
 
             // Initialize column visibility - check localStorage first
@@ -1618,7 +1646,8 @@
                     'CIRC3': ['', 'HasValue', 'Empty'],
                     'RES156': ['', 'Yes', 'Empty'],
                     'RES169': ['', 'Yes', 'Empty'],
-                    'RES123': ['', 'Yes', 'Empty']
+                    'RES123': ['', 'Yes', 'Empty'],
+                    'RES35': ['', 'Yes', 'Empty']
                 };
 
                 // ---- Rebuild the filter row from scratch every time ----
@@ -2407,9 +2436,50 @@
                 return html;
             }
 
-            // d: SRS details from /api/details (null while loading or on error).
+            // ---- Res35 (Option 2: dbo.grp_res35) ----
+            var RES35_MAX_ROWS = 500;
+
+            function res35Freq(g) {
+                if (g.freq_min === null || g.freq_min === undefined) return '';
+                var fmt = function(v) { return (Math.round(v * 1000) / 1000).toString(); };
+                return fmt(g.freq_min) + '&ndash;' + fmt(g.freq_max);
+            }
+
+            // r: res35 object from /api/details (null while loading or when SNS is not reachable)
+            function renderRes35(r, loaded) {
+                var html = detailSection('Res35', 'SNS database (live, dbo.grp_res35)');
+                if (!r) {
+                    return html + detailRow('Res35', loaded ? '<span class="text-muted">SNS database not reachable</span>' : '');
+                }
+                if (!r.in_sns) {
+                    return html + '<tr><td colspan="2" class="text-muted">Notice not found in SNS database.</td></tr>';
+                }
+                var n = r.groups.length;
+                html += detailRow('Res35', r.is_res35 ? '<b>Yes</b> &ndash; ' + n + ' group' + (n === 1 ? '' : 's') + ' in grp_res35' : 'No');
+                if (r.ntc_type && r.ntc_type !== 'N') {
+                    html += detailRow('Note', 'Not a non-GSO notice (ntc_type ' + escapeHtml(r.ntc_type) +
+                                              '); Res 35 applies to non-GSO systems only.');
+                }
+                if (n) {
+                    var t = '<div class="res35-groups"><table class="table table-sm res35-table"><thead><tr>' +
+                            '<th>grp_id</th><th>beam</th><th>E/R</th><th>freq (MHz)</th><th>milestone</th>' +
+                            '<th>met</th><th>next deadline</th></tr></thead><tbody>';
+                    r.groups.slice(0, RES35_MAX_ROWS).forEach(function(g) {
+                        t += '<tr><td>' + g.grp_id + '</td><td>' + detailValue(g.beam_name) + '</td><td>' +
+                             detailValue(g.emi_rcp) + '</td><td>' + res35Freq(g) + '</td><td>' + detailValue(g.ms_step) +
+                             '</td><td>' + detailValue(g.f_ms_met) + '</td><td>' +
+                             escapeHtml(formatDateDMY(g.d_ms_next_deadline)) + '</td></tr>';
+                    });
+                    t += '</tbody></table></div>';
+                    if (n > RES35_MAX_ROWS) t += '<div class="text-muted small">Showing first ' + RES35_MAX_ROWS + ' of ' + n + ' groups.</div>';
+                    html += '<tr><td colspan="2">' + t + '</td></tr>';
+                }
+                return html;
+            }
+
+            // d: coordination details, r: Res35 from /api/details (null while loading or on error).
             // Every field name is always shown; missing values stay blank.
-            function renderDetails(rowData, d) {
+            function renderDetails(rowData, d, r, loaded) {
                 var html = '<table class="table table-sm table-borderless">';
 
                 html += detailSection('SNTrack', 'MS Access sntrdat.mdb');
@@ -2422,9 +2492,11 @@
                     html += detailRow(f[1], v);
                 });
 
-                html += detailSection('SRS', 'srs_all.mdb');
-                if (d && !d.in_srs) {
-                    html += '<tr><td colspan="2" class="text-muted">Notice not found in SRS database.</td></tr>';
+                html += renderRes35(r, loaded);
+
+                html += detailSection('SRS', 'SNS database (live, dbo)');
+                if (d && !d.found) {
+                    html += '<tr><td colspan="2" class="text-muted">Notice not found in SNS database.</td></tr>';
                 }
                 d = d || {};
                 html += detailRow('Res156', rowData.RES156 ? 'Yes' : '');
@@ -2456,13 +2528,13 @@
                 $('#detailsModalTitle').text('Notice ' + (ntcId || '') +
                     (rowData.SatName ? ' – ' + rowData.SatName : ''));
                 $('#detailsModalBody').html(renderDetails(rowData, null) +
-                    '<div class="text-center text-muted py-2"><i class="fas fa-spinner fa-spin"></i> Loading SRS data...</div>');
+                    '<div class="text-center text-muted py-2"><i class="fas fa-spinner fa-spin"></i> Loading SNS data...</div>');
                 detailsModal.show();
 
                 if (detailsRequest) detailsRequest.abort();
                 if (!ntcId || !/^\d+$/.test(String(ntcId))) {
                     $('#detailsModalBody').html(renderDetails(rowData, null) +
-                        '<div class="text-muted px-2">No Notice ID &ndash; SRS data not available.</div>');
+                        '<div class="text-muted px-2">No Notice ID &ndash; SNS data not available.</div>');
                     return;
                 }
                 detailsRequest = $.ajax({
@@ -2470,7 +2542,7 @@
                     dataType: 'json',
                     timeout: 30000,
                     success: function(resp) {
-                        $('#detailsModalBody').html(renderDetails(rowData, resp.details));
+                        $('#detailsModalBody').html(renderDetails(rowData, resp.details, resp.res35, true));
                     },
                     error: function(xhr, status) {
                         if (status === 'abort') return;

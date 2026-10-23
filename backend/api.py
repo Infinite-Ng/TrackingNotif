@@ -206,12 +206,12 @@ def _classify_single(e_srvcls, freq_min, freq_max, ntc_type):
     return result
 
 
-def _connect_srs():
-    """Open a READ-ONLY connection to the SRS Access database.
-    Only SELECT statements may ever be executed on this connection."""
+def _connect_srs(mdb_path=None):
+    """Open a READ-ONLY connection to an SRS-format Access database
+    (srs_all.mdb by default). Only SELECT statements may ever be executed on it."""
     conn_str = (
         r'DRIVER={Microsoft Access Driver (*.mdb, *.accdb)};'
-        f'DBQ={_SRS_MDB_PATH};'
+        f'DBQ={mdb_path or _SRS_MDB_PATH};'
         r'ReadOnly=1;'
     )
     return pyodbc.connect(conn_str, readonly=True)
@@ -266,19 +266,24 @@ def _summarize_coordination(rows):
     }
 
 
-def fetch_notice_details(ntc_id):
-    """Query SRS (read-only, SELECT only) for the detail popup of one notice.
+def _query_coordination(cursor, ntc_id, schema=''):
+    """Coordination statistics of one notice (SELECT only).
 
-    Table links (verified against srs_all.mdb):
+    Works on both copies of the SRS table structure:
+      - SNS database on SQL Server, schema 'dbo.' (live data, used by the popup)
+      - SRS-format Access files ('' schema): srs_all.mdb (updated weekly) or a
+        submitted MDB (used by tools/compare_coord_stats.py)
+    Table links:
       notice          -> ntc_id
       provn           -> grp_id -> grp.ntc_id
       tr_aff_ntw      -> ntc_id
       coord_agree_ntw -> ntc_id
       all_aff_ntw     -> aff_rec_id -> grp_aff_rec.grp_id -> grp.ntc_id
-    Returns None for every field when the notice is not in SRS.
+    Returns None for every field when the notice is not found.
     """
+    s = schema
     details = {
-        'in_srs': False,
+        'found': False,
         'prov': None,
         'ntf_occurs': None,
         'prov_desc': None,
@@ -287,51 +292,59 @@ def fetch_notice_details(ntc_id):
         'coord_agree_ntw_count': None,
         'all_aff_ntw_count': None,
     }
-    srs_conn = _connect_srs()
-    try:
-        cursor = srs_conn.cursor()
-        cursor.execute(
-            "SELECT prov, ntf_occurs, prov_desc FROM [notice] WHERE ntc_id = ?", ntc_id)
-        row = cursor.fetchone()
-        if row is None:
-            return details
-        details['in_srs'] = True
-        details['prov'], details['ntf_occurs'], details['prov_desc'] = row[0], row[1], row[2]
+    cursor.execute(f"SELECT prov, ntf_occurs, prov_desc FROM {s}[notice] WHERE ntc_id = ?", ntc_id)
+    row = cursor.fetchone()
+    if row is None:
+        return details
+    details['found'] = True
+    details['prov'], details['ntf_occurs'], details['prov_desc'] = row[0], row[1], row[2]
 
-        cursor.execute("""
-            SELECT DISTINCT p.coord_prov, p.agree_st, p.coord_st, p.adm
-            FROM [provn] AS p INNER JOIN [grp] AS g ON p.grp_id = g.grp_id
+    cursor.execute(f"""
+        SELECT DISTINCT p.coord_prov, p.agree_st, p.coord_st, p.adm
+        FROM {s}[provn] AS p INNER JOIN {s}[grp] AS g ON p.grp_id = g.grp_id
+        WHERE g.ntc_id = ?
+    """, ntc_id)
+    details['provn'] = _summarize_coordination(cursor.fetchall())
+
+    # tr_aff_ntw is often empty (cleared after the coordination wizard runs).
+    cursor.execute(f"""
+        SELECT DISTINCT coord_prov, agree_st, coord_st, adm
+        FROM {s}[tr_aff_ntw]
+        WHERE ntc_id = ?
+    """, ntc_id)
+    details['tr_aff_ntw'] = _summarize_coordination(cursor.fetchall())
+
+    # No primary key on coord_agree_ntw: plain row count, no de-duplication.
+    cursor.execute(f"SELECT COUNT(*) FROM {s}[coord_agree_ntw] WHERE ntc_id = ?", ntc_id)
+    details['coord_agree_ntw_count'] = cursor.fetchone()[0]
+
+    # One all_aff_ntw record can be linked to several groups of the same notice,
+    # so count distinct aff_rec_id (written without COUNT(DISTINCT) for Access).
+    cursor.execute(f"""
+        SELECT COUNT(*) FROM (
+            SELECT DISTINCT a.aff_rec_id
+            FROM ({s}[all_aff_ntw] AS a
+                  INNER JOIN {s}[grp_aff_rec] AS r ON a.aff_rec_id = r.aff_rec_id)
+                  INNER JOIN {s}[grp] AS g ON r.grp_id = g.grp_id
             WHERE g.ntc_id = ?
-        """, ntc_id)
-        details['provn'] = _summarize_coordination(cursor.fetchall())
-
-        # tr_aff_ntw is often empty (cleared after the coordination wizard runs).
-        cursor.execute("""
-            SELECT DISTINCT coord_prov, agree_st, coord_st, adm
-            FROM [tr_aff_ntw]
-            WHERE ntc_id = ?
-        """, ntc_id)
-        details['tr_aff_ntw'] = _summarize_coordination(cursor.fetchall())
-
-        # No primary key on coord_agree_ntw: plain row count, no de-duplication.
-        cursor.execute("SELECT COUNT(*) FROM [coord_agree_ntw] WHERE ntc_id = ?", ntc_id)
-        details['coord_agree_ntw_count'] = cursor.fetchone()[0]
-
-        # One all_aff_ntw record can be linked to several groups of the same
-        # notice, so count distinct aff_rec_id (Access has no COUNT(DISTINCT)).
-        cursor.execute("""
-            SELECT COUNT(*) FROM (
-                SELECT DISTINCT a.aff_rec_id
-                FROM ([all_aff_ntw] AS a
-                      INNER JOIN [grp_aff_rec] AS r ON a.aff_rec_id = r.aff_rec_id)
-                      INNER JOIN [grp] AS g ON r.grp_id = g.grp_id
-                WHERE g.ntc_id = ?
-            ) AS x
-        """, ntc_id)
-        details['all_aff_ntw_count'] = cursor.fetchone()[0]
-    finally:
-        srs_conn.close()
+        ) AS x
+    """, ntc_id)
+    details['all_aff_ntw_count'] = cursor.fetchone()[0]
     return details
+
+
+def fetch_notice_details(ntc_id, conn):
+    """Popup coordination statistics from the live SNS database (SQL Server, dbo)."""
+    return _query_coordination(conn.cursor(), ntc_id, schema='dbo.')
+
+
+def fetch_notice_details_mdb(ntc_id, mdb_path=None):
+    """Same statistics from an SRS-format Access file (srs_all.mdb by default)."""
+    conn = _connect_srs(mdb_path)
+    try:
+        return _query_coordination(conn.cursor(), ntc_id)
+    finally:
+        conn.close()
 
 
 def fetch_esim_resolutions():
@@ -443,6 +456,58 @@ def fetch_esim_resolutions():
         if srs_conn:
             srs_conn.close()
     return result
+
+
+# --- Resolution 35 (milestone-based approach for non-GSO systems) ---
+# Option 2: dbo.grp_res35 in the SNS database lists every group (beam) handled
+# under Res35. A notice is Res35 as soon as one of its groups is in that table.
+
+def _iso(value):
+    return value.isoformat() if isinstance(value, (date, datetime)) else value
+
+
+def fetch_res35(ntc_id, conn):
+    """Res35 (Option 2) of one notice: the notice's groups listed in dbo.grp_res35 (SELECT only)."""
+    cursor = conn.cursor()
+    cursor.execute("SELECT ntc_type FROM dbo.notice WHERE ntc_id = ?", ntc_id)
+    row = cursor.fetchone()
+    result = {'in_sns': row is not None, 'ntc_type': _clean(row[0]) if row else None,
+              'is_res35': False, 'groups': []}
+    if row is None:
+        return result
+    cursor.execute("""
+        SELECT g.grp_id, g.beam_name, g.emi_rcp, g.freq_min, g.freq_max,
+               r.ms_step, r.f_ms_met, r.d_ms_next_deadline
+        FROM dbo.grp_res35 r
+        INNER JOIN dbo.grp g ON g.grp_id = r.grp_id
+        WHERE g.ntc_id = ?
+        ORDER BY g.grp_id
+    """, ntc_id)
+    result['groups'] = [{'grp_id': r[0], 'beam_name': _clean(r[1]), 'emi_rcp': _clean(r[2]),
+                         'freq_min': r[3], 'freq_max': r[4], 'ms_step': _clean(r[5]),
+                         'f_ms_met': _clean(r[6]), 'd_ms_next_deadline': _iso(r[7])}
+                        for r in cursor.fetchall()]
+    result['is_res35'] = bool(result['groups'])
+    return result
+
+
+def fetch_res35_notice_ids():
+    """ntc_ids having at least one group in dbo.grp_res35, for the main table."""
+    conn = get_sql_server_connection()
+    if not conn:
+        return set()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT DISTINCT g.ntc_id FROM dbo.grp_res35 r
+            INNER JOIN dbo.grp g ON g.grp_id = r.grp_id
+        """)
+        return {str(r[0]) for r in cursor.fetchall()}
+    except Exception as e:
+        logger.error(f"Error fetching Res35 notices: {e}")
+        return set()
+    finally:
+        conn.close()
 
 
 def get_mdb_connection(retries=3, delay=2):
@@ -738,6 +803,13 @@ def fetch_data():
 
     logger.info(f"ESIM merge: {esim_matched}/{len(final_data)} records matched with SRS data"
                 f" (RES156={res156_count} RES169={res169_count} RES123={res123_count})")
+
+    # --- Res35 (Option 2: notice has a group in dbo.grp_res35) ---
+    res35_ids = fetch_res35_notice_ids()
+    for row in final_data:
+        row['RES35'] = str(row.get('ntc_id', '')) in res35_ids
+    logger.info(f"Res35 merge: {sum(1 for r in final_data if r['RES35'])} records"
+                f" ({len(res35_ids)} Res35 notices in SNS)")
     return final_data, None
 
 
@@ -910,17 +982,32 @@ def refresh_data():
 @app.route('/api/details/<ntc_id>', methods=['GET'])
 @rate_limit
 def get_notice_details(ntc_id):
-    """Extra SRS fields for one notice (used by the row-click popup)."""
+    """Coordination statistics and Res35 (Option 2) for one notice (row-click popup),
+    read live from the SNS database (SQL Server, dbo). The two parts are queried
+    independently: if one fails the other is still returned."""
     if not ntc_id.isdigit():
         return jsonify({'success': False, 'error': 'ntc_id must be numeric'}), 400
-    if not os.path.exists(_SRS_MDB_PATH):
-        return jsonify({'success': False, 'error': 'SRS database not reachable'}), 503
+    conn = get_sql_server_connection()
+    if not conn:
+        return jsonify({'success': False, 'error': 'SNS database not reachable'}), 503
+    details, res35, errors = None, None, []
     try:
-        details = fetch_notice_details(int(ntc_id))
-    except Exception as e:
-        logger.error(f"Error fetching SRS details for ntc_id={ntc_id}: {e}")
-        return jsonify({'success': False, 'error': 'Failed to query SRS database'}), 500
-    return jsonify({'success': True, 'ntc_id': ntc_id, 'details': details})
+        try:
+            details = fetch_notice_details(int(ntc_id), conn)
+        except Exception as e:
+            logger.error(f"Error fetching coordination details for ntc_id={ntc_id}: {e}")
+            errors.append('Failed to query coordination data')
+        try:
+            res35 = fetch_res35(int(ntc_id), conn)
+        except Exception as e:
+            logger.error(f"Error fetching Res35 for ntc_id={ntc_id}: {e}")
+            errors.append('Failed to query Res35 data')
+    finally:
+        conn.close()
+    if details is None and res35 is None:
+        return jsonify({'success': False, 'error': '; '.join(errors)}), 500
+    return jsonify({'success': True, 'ntc_id': ntc_id, 'details': details, 'res35': res35,
+                    'errors': errors})
 
 
 @app.route('/api/health', methods=['GET'])
