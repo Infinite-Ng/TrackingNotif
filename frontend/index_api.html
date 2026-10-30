@@ -1019,6 +1019,11 @@
         // Selected Status values (default: all selected, will be populated after data loads)
         let selectedStatuses = [];
         let allStatuses = [];
+        // Status values selected by default (on load and on Clear Filters)
+        const DEFAULT_STATUSES = ['Accepted by BR', 'Published As Received', 'Published in BRIFIC', 'Submitted to BR', 'Archived'];
+        function getDefaultStatuses() {
+            return allStatuses.filter(function(s) { return DEFAULT_STATUSES.includes(s); });
+        }
 
         // All dates are shown as dd.mm.yyyy (e.g. 07.10.2026).
         // Sorting and filtering always use the raw ISO value (yyyy-mm-dd...).
@@ -1996,7 +2001,7 @@
                         // Add empty option
                         statusSet.add('');
                         allStatuses = Array.from(statusSet).sort();
-                        selectedStatuses = [...allStatuses]; // Default: all selected
+                        selectedStatuses = getDefaultStatuses();
                         // Build top-bar chip filter
                         buildBigStatusFilter();
 
@@ -2019,8 +2024,9 @@
                         
                         allStatuses.forEach(function(status) {
                             var displayVal = status === '' ? '(empty)' : status;
-                            var $item = $('<label class="multi-select-item selected">' +
-                                '<input type="checkbox" value="' + status + '" checked>' +
+                            var isSel = selectedStatuses.includes(status);
+                            var $item = $('<label class="multi-select-item' + (isSel ? ' selected' : '') + '">' +
+                                '<input type="checkbox" value="' + status + '"' + (isSel ? ' checked' : '') + '>' +
                                 '<span>' + displayVal + '</span>' +
                                 '</label>');
                             $menu.append($item);
@@ -2045,6 +2051,10 @@
                             syncStatusFilterUI();
                             api.draw();
                         });
+
+                        // Apply the default Status selection
+                        syncStatusFilterUI();
+                        api.draw();
 
                     } else if (selectColumns[dataSrc]) {
                         var options = selectColumns[dataSrc].map(function(opt) {
@@ -2713,8 +2723,8 @@
                 });
                 $('#supBtn').text('All (' + allSUPs.length + ')');
 
-                // Reset Status to all selected (syncs chip box + in-table)
-                selectedStatuses = [...allStatuses];
+                // Reset Status to the default selection (syncs chip box + in-table)
+                selectedStatuses = getDefaultStatuses();
                 syncStatusFilterUI();
                 
                 table.columns().search('');
