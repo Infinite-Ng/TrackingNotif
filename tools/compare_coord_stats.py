@@ -1,20 +1,23 @@
 """
-Compare the SRS detail-popup statistics with Wu's reference workbook
+Compare the detail-popup coordination statistics with Wu's reference workbook
 (coord_st_statistics_*.xlsx, columns J-Q).
 
 READ-ONLY: only SELECT statements are run, through the same
-fetch_notice_details() used by /api/details/<ntc_id>.
+_query_coordination() used by /api/details/<ntc_id>.
 
 Usage (32-bit env, needed for the Access ODBC driver):
-    tracking_env_32\\python.exe tools\\compare_coord_stats.py <workbook.xlsx> [out.csv] [--source-mdb]
+    tracking_env_32\\python.exe tools\\compare_coord_stats.py <workbook.xlsx> [out.csv] [--source-srs | --source-mdb]
 
-    --source-mdb  read each notice's submitted MDB (column mdb_file) instead of
-                  srs_all.mdb; this is the workbook's own data source, so it
-                  checks the counting logic independently of BR processing.
+    (default)     live SNS database on SQL Server (schema dbo), as the popup;
+                  credentials are read from backend/.flaskenv
+    --source-srs  srs_all.mdb (weekly copy of the same data)
+    --source-mdb  each notice's submitted MDB (column mdb_file); this is the
+                  workbook's own data source, so it checks the counting logic
+                  independently of later changes to the data.
 
 Note: the workbook was computed from each administration's submitted MDB
-(column mdb_file), while we query srs_all.mdb, so some differences are
-expected to come from the data source rather than the code.
+(column mdb_file), so differences with SNS / srs_all.mdb are expected to come
+from the data source rather than the code.
 """
 import ast
 import csv
@@ -27,12 +30,14 @@ import xml.etree.ElementTree as ET
 
 import pyodbc
 
-_API_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'backend', 'api.py')
-_SRS_FUNCS = {'_connect_srs', '_clean', '_summarize_coordination', 'fetch_notice_details'}
+_BACKEND = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'backend')
+_API_PATH = os.path.join(_BACKEND, 'api.py')
+_SRS_FUNCS = {'_connect_srs', '_clean', '_summarize_coordination', '_query_coordination',
+              'fetch_notice_details_mdb'}
 
 
 def load_srs_functions():
-    """Load only the SRS query functions from backend/api.py.
+    """Load only the coordination query functions from backend/api.py.
     Importing api.py itself would start the cache refresher and touch the
     other databases, so the function definitions are extracted instead."""
     with open(_API_PATH, encoding='utf-8') as f:
@@ -46,6 +51,18 @@ def load_srs_functions():
 
 
 api = load_srs_functions()
+
+
+def connect_sns():
+    """Read-only connection to the SNS database, using backend/.flaskenv."""
+    from dotenv import dotenv_values
+    env = dotenv_values(os.path.join(_BACKEND, '.flaskenv'))
+    return pyodbc.connect(
+        "DRIVER={SQL Server};"
+        f"SERVER={env.get('SQL_SERVER_HOST', 'sydney.itu.int')};"
+        f"DATABASE={env.get('SQL_SERVER_DB', 'SpaceNetworkSystem')};"
+        f"UID={env.get('SQL_SERVER_USER', '')};PWD={env.get('SQL_SERVER_PASSWORD', '')};",
+        timeout=60, readonly=True)
 
 _NS = {'m': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
 
@@ -121,29 +138,35 @@ def compare_row(row, d):
 
 
 def main():
-    args = [a for a in sys.argv[1:] if a != '--source-mdb']
-    use_submitted_mdb = '--source-mdb' in sys.argv
+    flags = {a for a in sys.argv[1:] if a.startswith('--')}
+    args = [a for a in sys.argv[1:] if not a.startswith('--')]
     if not args:
         sys.exit(__doc__)
+    source = 'mdb' if '--source-mdb' in flags else 'srs' if '--source-srs' in flags else 'sns'
     out_path = args[1] if len(args) > 1 else 'compare_coord_stats_result.csv'
     rows = read_xlsx(args[0])
-    srs_path = api._SRS_MDB_PATH
+    source_label = {'sns': 'SNS database (SQL Server, dbo)', 'srs': api._SRS_MDB_PATH,
+                    'mdb': 'submitted MDB (mdb_file column)'}[source]
+    sns = connect_sns() if source == 'sns' else None
 
-    not_in_srs, all_match, mismatches = [], 0, []
+    not_found, all_match, mismatches = [], 0, []
     per_column = {}
     for row in rows:
         ntc_id = row['ntc_id'].strip()
-        # --source-mdb: run the same code against the submitted MDB the
-        # workbook was built from, to check the counting logic itself.
-        api._SRS_MDB_PATH = row.get('mdb_file', '').strip() if use_submitted_mdb else srs_path
         try:
-            d = api.fetch_notice_details(int(ntc_id))
+            if source == 'sns':
+                d = api._query_coordination(sns.cursor(), int(ntc_id), schema='dbo.')
+            elif source == 'srs':
+                d = api.fetch_notice_details_mdb(int(ntc_id))
+            else:
+                # the submitted MDB the workbook was built from: checks the counting logic itself
+                d = api.fetch_notice_details_mdb(int(ntc_id), row.get('mdb_file', '').strip())
         except Exception as e:
-            print(f'{ntc_id}: cannot read {api._SRS_MDB_PATH}: {str(e)[:100]}')
-            not_in_srs.append(ntc_id)
+            print(f'{ntc_id}: cannot read source: {str(e)[:100]}')
+            not_found.append(ntc_id)
             continue
-        if not d['in_srs']:
-            not_in_srs.append(ntc_id)
+        if not d['found']:
+            not_found.append(ntc_id)
             continue
         diffs = list(compare_row(row, d))
         if not diffs:
@@ -156,13 +179,15 @@ def main():
     with open(out_path, 'w', newline='', encoding='utf-8-sig') as f:
         w = csv.writer(f)
         w.writerow(['ntc_id', 'SatName', 'TypeOfSubmission', 'column', 'excel (expected)',
-                    'submitted MDB (actual)' if use_submitted_mdb else 'srs_all.mdb (actual)', 'mdb_file'])
+                    f'{source_label} (actual)', 'mdb_file'])
         w.writerows(mismatches)
+    if sns:
+        sns.close()
 
-    checked = len(rows) - len(not_in_srs)
+    checked = len(rows) - len(not_found)
     print(f'Workbook rows:          {len(rows)}')
-    print(f'Source:                 {"submitted MDB (mdb_file column)" if use_submitted_mdb else srs_path}')
-    print(f'Notice not in source:   {len(not_in_srs)} (skipped)')
+    print(f'Source:                 {source_label}')
+    print(f'Notice not in source:   {len(not_found)} (skipped)')
     print(f'Compared:               {checked}')
     print(f'  all 8 columns match:  {all_match}')
     print(f'  with differences:     {checked - all_match}')
