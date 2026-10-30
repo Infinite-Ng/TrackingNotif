@@ -134,7 +134,7 @@ SQL_SERVER_CONN_STRING = (
     "DRIVER={SQL Server};"
     f"SERVER={os.environ.get('SQL_SERVER_HOST', 'sydney.itu.int')};"
     f"DATABASE={os.environ.get('SQL_SERVER_DB', 'SpaceNetworkSystem')};"
-    f"UID={os.environ.get('SQL_SERVER_USER', 'sns_a')};"
+    f"UID={os.environ.get('SQL_SERVER_USER', 'css_sns_ro_notif')};"
     f"PWD={_require_secret('SQL_SERVER_PASSWORD')};"
 )
 

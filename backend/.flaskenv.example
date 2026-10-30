@@ -10,7 +10,7 @@ FLASK_RUN_PORT=5001
 # SQL Server (SpaceNetworkSystem)
 SQL_SERVER_HOST=sydney.itu.int
 SQL_SERVER_DB=SpaceNetworkSystem
-SQL_SERVER_USER=sns_a
+SQL_SERVER_USER=css_sns_ro_notif
 SQL_SERVER_PASSWORD=
 
 # MS Access (SNTRACK)
