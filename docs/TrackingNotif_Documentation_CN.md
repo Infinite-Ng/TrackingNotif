@@ -369,7 +369,7 @@ IIS 共享目录中的 `index_api_.html` 是 2026 年 10 月改动**之前**的�
 | `MDB_PASSWORD` | ✓ | — | SNTrack MDB 密码 |
 | `SQL_SERVER_HOST` | | `sydney.itu.int` | SQL Server 主机 |
 | `SQL_SERVER_DB` | | `SpaceNetworkSystem` | SQL Server 数据库 |
-| `SQL_SERVER_USER` | | `sns_a` | SQL Server 用户 |
+| `SQL_SERVER_USER` | | `css_sns_ro_notif`（只读） | SQL Server 用户 |
 | `MDB_USER` | | `spruser01` | SNTrack MDB 用户 |
 | `SRS_MDB_PATH` | | `\\blue\dfs\br\BR_DATA\SPACE\SRS_DB\srs_all.mdb` | SRS 数据库 |
 | `REFRESH_INTERVAL_SECONDS` | | `86400`（1 天） | 自动刷新间隔 |
@@ -475,7 +475,7 @@ C:\Users\xianwu\Anaconda3\python.exe generate_cert.py
 
 - **自签名证书带来的不便。** 每个用户都要在每个浏览器中信任一次证书。更好的做法是让 API 经过 IIS 转发，页面只访问自身站点。`web.config` 已有规则 `api/*` → `http://156.106.168.185:5000`，但目前返回 **IIS 错误 500.50**（URL Rewrite，访问被拒绝），最可能的原因是规则设置了 `HTTP_X_FORWARDED_HOST`，而该服务器变量不在服务器允许列表中。修复需要 IIS 管理员（或删除该 `<serverVariables>` 段），然后用 waitress 以 HTTP 方式在 5000 端口运行后端，并把 `BACKEND_URL` 改为相对路径 `api/`。
 - **后端不是 Windows 服务。** 重启或注销后会停止。可考虑开机计划任务或服务包装。
-- **待确认规则：** 弹窗中 `all_aff_ntw` 的关联方式（[7.1](#71-srs-表与-notice-的关联方式)）。
+- **待确认规则：** 弹窗中 `all_aff_ntw` 的关联方式（[7.1](#71-srs-表与-notice-的关联方式sns-dbo-与-srs_allmdb-相同)）。
 - **无用代码：** `index_api.html` 中的 `loadDataFromAPI()` 从未被调用（其中还引用了未定义的 `filteredData`）。
 - **重复页面：** `index_api.html` 与 `index_zhiruo.html` 内容相同，需保持同步或删除副本。
 - **写死的路径**（本地数据目录、IIS 缓存路径）使服务器迁移更困难。

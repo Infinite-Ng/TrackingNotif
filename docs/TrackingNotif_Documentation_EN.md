@@ -26,13 +26,14 @@ Documentation (English) · Chinese version: [TrackingNotif_Documentation_CN.md](
 
 ## 1. Overview
 
-The **Notice Tracking System** is an internal web application for the ITU Space Services Department. It shows space-station notices in one searchable, filterable and exportable table, combining data from three internal databases:
+The **Notice Tracking System** is an internal web application for the ITU Space Services Department. It shows space-station notices in one searchable, filterable and exportable table, combining data from these internal databases:
 
 | Source | Database | What it provides |
 |--------|----------|------------------|
 | **SNTrack** | MS Access `sntrdat.mdb` | BR tracking data (BRReg date, ADM, CIRC/pub, remarks, …) |
 | **e-submission** | SQL Server `SpaceNetworkSystem` on `sydney.itu.int` | Submission data (SatName, DateOfReceive, TypeOfSubmission, Status, …) |
-| **SRS** | MS Access `srs_all.mdb` | ESIM resolution flags (Res156/169/123) and the coordination details in the row popup |
+| **SNS (SRS tables)** | SQL Server `SpaceNetworkSystem`, schema `dbo` (live) | Res35 flag (`grp_res35`) and the coordination details in the row popup |
+| **SRS** | MS Access `srs_all.mdb` (weekly copy) | ESIM resolution flags (Res156/169/123) |
 
 All databases are opened **read-only**; the system never writes to them.
 
@@ -58,8 +59,8 @@ All databases are opened **read-only**; the system never writes to them.
    │     /api/details/<ntc_id>        Flask backend (backend/api.py) ─┘
    └─────────────────────────────────►  ├── in-memory cache + background refresher
                                         ├── SNTrack  (sntrdat.mdb, local copy)
-                                        ├── e-submission (SQL Server)
-                                        └── SRS      (srs_all.mdb)
+                                        ├── e-submission + SNS SRS tables, Res35 (SQL Server)
+                                        └── SRS      (srs_all.mdb, ESIM only)
 ```
 
 **What happens when a user opens the page:**
@@ -88,7 +89,8 @@ The backend can also serve the frontend itself at `https://156.106.168.185:5001/
 |--------|----------|-------------|----------|
 | SNTrack | `\\blue\dfs\br\BR_DATA\SPACE\SNTRACK\sntrdat.mdb` (+ `sntrapp.mdw` workgroup file) | `tblSpaceStnNotif` | `ntc_id` |
 | e-submission | SQL Server `sydney.itu.int` / `SpaceNetworkSystem` | `res908.Res908`; Status from `dbo.Submissions` + `dbo.SubmissionsStatus` via `SubmissionId` | `SnsNtcId` = `ntc_id` |
-| SRS | `\\blue\dfs\br\BR_DATA\SPACE\SRS_DB\srs_all.mdb` | `notice`, `grp`, `e_srvcls`, `provn`, `tr_aff_ntw`, `coord_agree_ntw`, `all_aff_ntw`, `grp_aff_rec` | `ntc_id` |
+| SNS (SRS tables, live) | SQL Server `sydney.itu.int` / `SpaceNetworkSystem`, schema `dbo` | `notice`, `grp`, `provn`, `tr_aff_ntw`, `coord_agree_ntw`, `all_aff_ntw`, `grp_aff_rec`, `grp_res35` | `ntc_id` |
+| SRS (weekly copy) | `\\blue\dfs\br\BR_DATA\SPACE\SRS_DB\srs_all.mdb` | `notice`, `grp`, `e_srvcls` (ESIM classification); comparison tool `--source-srs` | `ntc_id` |
 
 The SNTrack MDB is **copied to a local folder** (`LOCAL_DATA_DIR` in `api.py`) at the start of each refresh and queried from there, so a locked network file never blocks the backend. If the copy fails, the previous local copy is used.
 
@@ -96,7 +98,8 @@ The SNTrack MDB is **copied to a local folder** (`LOCAL_DATA_DIR` in `api.py`) a
 
 - **SNTrack:** BRREG, 2d_date, ADM, PHASE, tgt_ntc_id, 11.32A, 11.41, subtoc, SUP, d_val_in, d_check_in, d_spr_out, d_complete, d_wmeeting, CIRC/pub, CIRC2/pub2, CIRC3/pub3, remarks, tex_remarks
 - **e-submission:** DateOfReceive, SatName, long_nom, ntwk_org, act_code, TypeOfSubmission, Status, SNTrack ID (`sntrack_id`), SubmissionId, InternalReference, DocumentumReference
-- **SRS:** Res156 / Res169 / Res123 (rules in [ESIM_RES_Classification.md](ESIM_RES_Classification.md)) and the SRS section of the row popup ([Section 7](#7-notice-detail-popup-and-srs-statistics)).
+- **SRS (`srs_all.mdb`):** Res156 / Res169 / Res123 (rules in [ESIM_RES_Classification.md](ESIM_RES_Classification.md)).
+- **SNS (live):** Res35 ([7.4](#74-res35-option-2)) and the SRS section of the row popup ([Section 7](#7-notice-detail-popup-and-srs-statistics)).
 
 BRREG (SNTrack) and DateOfReceive (e-submission) mean the same thing but can differ, e.g. when a submission was returned.
 
@@ -250,11 +253,14 @@ Clicking a row opens a popup with three sections, grouped by data source:
 |---------|---------|--------|
 | SNTrack | All SNTrack fields of the row | Already in the table data |
 | e-submission | All e-submission fields of the row | Already in the table data |
-| SRS | Res156/169/123, `prov`, `ntf_occurs`, `prov_desc`, coordination statistics from `provn` and `tr_aff_ntw`, row counts of `coord_agree_ntw` and `all_aff_ntw` | Queried live: `GET /api/details/<ntc_id>` |
+| Res35 | Whether the notice is Res35 (Option 2), and its groups in `dbo.grp_res35` with milestones ([7.4](#74-res35-option-2)) | Queried live: `GET /api/details/<ntc_id>` |
+| SRS | Res156/169/123, `prov`, `ntf_occurs`, `prov_desc`, coordination statistics from `provn` and `tr_aff_ntw`, row counts of `coord_agree_ntw` and `all_aff_ntw` | Res156/169/123: already in the table data; the rest queried live: `GET /api/details/<ntc_id>` |
 
-Empty values are shown as blank fields. A notice that is not (yet) in SRS — typically a new submission — shows *"Notice not found in SRS database."*
+"Queried live" means the tables in schema `dbo` of SQL Server `sydney.itu.int` / `SpaceNetworkSystem` (SELECT only), no longer `srs_all.mdb`. The `dbo` tables `notice`, `grp`, `provn`, `tr_aff_ntw`, `coord_agree_ntw`, `all_aff_ntw` and `grp_aff_rec` have the same names and fields as in `srs_all.mdb` (plus `ValidFrom` / `ValidTo`); `srs_all.mdb` is a weekly copy, `dbo` is live. A spot check of 160 notices gave identical results for the 143 that are in `srs_all.mdb`; the other 17 exist only in SNS (new submissions, and some old notices never published in an IFIC). SNS also has the schemas `ific` (published versions per IFIC) and `history_dbo` (history); the popup does not use them.
 
-### 7.1 How SRS tables link to a notice
+Empty values are shown as blank fields. A notice that is not in the SNS database shows *"Notice not found in SNS database."*
+
+### 7.1 How SRS tables link to a notice (same in SNS `dbo` and `srs_all.mdb`)
 
 | Table | Link |
 |-------|------|
@@ -286,12 +292,25 @@ Based on Wu's e-mail "The coord_st statistics result" (24 February 2026). `provn
 
 ```bat
 tracking_env_32\python.exe tools\compare_coord_stats.py coord_st_statistics_part1.xlsx result.csv
+tracking_env_32\python.exe tools\compare_coord_stats.py coord_st_statistics_part1.xlsx result.csv --source-srs
 tracking_env_32\python.exe tools\compare_coord_stats.py coord_st_statistics_part1.xlsx result.csv --source-mdb
 ```
 
-- Without options: queries `srs_all.mdb` (the data the popup uses).
+- Without options: queries the SNS database `dbo` (the data the popup uses), with the account from `backend/.flaskenv`.
+- `--source-srs`: queries `srs_all.mdb` (weekly copy) instead.
 - `--source-mdb`: reads each administration's submitted MDB (Excel column `mdb_file`) instead — the workbook's own source — to check the counting logic independently.
-- Differences between the two are expected: BR processing changes the data (e.g. an adm with coord_st = 'O' at submission becomes agree_st = 'O' in SRS; coord_prov prefix `X/` becomes `11.41/`; tr_aff_ntw is cleared).
+- Differences between SNS / `srs_all.mdb` and the submitted MDB are expected: BR processing changes the data (e.g. an adm with coord_st = 'O' at submission becomes agree_st = 'O' in SRS; coord_prov prefix `X/` becomes `11.41/`; tr_aff_ntw is cleared).
+
+### 7.4 Res35 (Option 2)
+
+Resolution 35 is the milestone-based approach for non-GSO systems. Hierarchy: Network (notice) → Beam (group) → E/R → SA_number → Service Area. **If one group of a notice is under Res35, the whole notice is Res35.**
+
+Option 2 uses the result BR has already computed: `dbo.grp_res35` in the SNS database lists every group under Res35 (`grp_res35.grp_id` → `grp.ntc_id`), with milestone data: `ms_step` (M0–M3), `f_ms_met` (met or not) and `d_ms_next_deadline` (next deadline). On 22 Oct 2026 the table had 48,960 groups in 140 notices, all non-GSO.
+
+- Main table **Res35** column: Yes when the notice has any group in `dbo.grp_res35`; updated on every refresh.
+- Popup **Res35** section: Yes (with the number of groups) / No, and the group list (grp_id, beam, E/R, frequency, milestone, met, next deadline; at most 500 rows shown). Notices that are not non-GSO are flagged, since Res 35 applies to non-GSO systems only.
+
+Option 1 (computing Res35 from the resolution text and cross-checking it against Option 2) is left for a later version.
 
 ---
 
@@ -303,7 +322,7 @@ Base URL: `https://156.106.168.185:5001`
 |--------|------|:---:|-------------|
 | GET | `/api/data` | ✓ | Returns the in-memory cache: `{success, count, timestamp, stale, data}`. `503` until the first data has been loaded. |
 | POST / GET | `/api/refresh` | ✓ | Schedules a background refresh; returns `202` immediately with `current_timestamp`. |
-| GET | `/api/details/<ntc_id>` | ✓ | SRS fields for one notice (popup). `400` if `ntc_id` is not numeric, `503` if `srs_all.mdb` is unreachable, `500` on query error. |
+| GET | `/api/details/<ntc_id>` | ✓ | Coordination statistics and Res35 for one notice (popup), queried live from SNS: `{success, details, res35, errors}`. `400` if `ntc_id` is not numeric, `503` if the SNS database is unreachable, `500` if both parts fail (if only one fails, the other is returned and the error is listed in `errors`). |
 | GET | `/api/health` | — | `{"status": "healthy", "timestamp": ...}` |
 | GET | `/`, `/index_api.html`, `/<file>` | — | Serves files from `frontend/`. |
 
@@ -350,7 +369,7 @@ Copy `backend/.flaskenv.example` to `backend/.flaskenv` and fill in the values. 
 | `MDB_PASSWORD` | ✓ | — | SNTrack MDB password |
 | `SQL_SERVER_HOST` | | `sydney.itu.int` | SQL Server host |
 | `SQL_SERVER_DB` | | `SpaceNetworkSystem` | SQL Server database |
-| `SQL_SERVER_USER` | | `sns_a` | SQL Server user |
+| `SQL_SERVER_USER` | | `css_sns_ro_notif` (read-only) | SQL Server user |
 | `MDB_USER` | | `spruser01` | SNTrack MDB user |
 | `SRS_MDB_PATH` | | `\\blue\dfs\br\BR_DATA\SPACE\SRS_DB\srs_all.mdb` | SRS database |
 | `REFRESH_INTERVAL_SECONDS` | | `86400` (1 day) | Automatic refresh interval |
@@ -443,7 +462,7 @@ Backend changes (`api.py`) only take effect after restarting the backend.
 | Refresh does nothing; backend log shows no requests | Backend not running, or running as **plain HTTP** | `curl.exe -k https://156.106.168.185:5001/api/health`; if it fails, check the start command ([10.3](#103-starting-the-backend)) |
 | "Server not reachable – showing cached data" | Backend down, or this browser does not trust the certificate | Check the backend; follow [Section 5](#5-first-time-setup-per-browser) |
 | Backend crashes at start with `ssl.SSLError: [SSL] PEM lib` | `cert.pem` / `key.pem` empty or invalid | Regenerate the certificate ([10.5](#105-ssl-certificate)) |
-| Popup shows "Could not load SRS data" | Backend unreachable, or `srs_all.mdb` not reachable | Check the backend and the `\\blue` share |
+| Popup shows "Could not load SRS data" or "SNS database not reachable" | Backend unreachable, or SQL Server unreachable / account invalid | Check the backend and the SQL Server account in `.flaskenv` |
 | Refresh shows "Refresh may be incomplete" / "Refresh timed out" | Refresh took longer than the polling window (~70 s) | Check the backend log for slow or failing database connections |
 | `429 Too Many Requests` | Rate limit (30 requests/min per IP) | Wait a minute |
 | Data does not change after refresh | A database connection failed; previous data kept (`stale: true`) | Check credentials in `.flaskenv` and the log |
@@ -456,7 +475,9 @@ Backend changes (`api.py`) only take effect after restarting the backend.
 
 - **Self-signed certificate friction.** Every user must trust the certificate once per browser. Better: route the API through IIS so the page calls its own site. `web.config` already has a rule `api/*` → `http://156.106.168.185:5000`, but it currently fails with **IIS error 500.50** (URL Rewrite, access denied) — most likely because the rule sets `HTTP_X_FORWARDED_HOST`, which is not in the server's allowed server variables. Fixing it needs an IIS administrator (or removing that `<serverVariables>` block), then running the backend with waitress over HTTP on port 5000 and pointing `BACKEND_URL` at the relative `api/` path.
 - **Backend is not a Windows service.** It stops on reboot/logoff. Consider a scheduled task at start-up or a service wrapper.
-- **Rule pending confirmation:** the `all_aff_ntw` link in the popup ([7.1](#71-how-srs-tables-link-to-a-notice)).
+- **Res35 failure is silent:** if the `grp_res35` query fails during a refresh, every row shows Res35 = No instead of "unknown". In the popup, a part that failed is left blank; the `errors` list from `/api/details` is not shown.
+- **Legacy script credentials:** `dataTransfer/data2Json.py` still has the old SQL Server account and passwords as hard-coded fallbacks (also in git history). Remove them, or retire the script.
+- **Rule pending confirmation:** the `all_aff_ntw` link in the popup ([7.1](#71-how-srs-tables-link-to-a-notice-same-in-sns-dbo-and-srs_allmdb)).
 - **Dead code:** `loadDataFromAPI()` in `index_api.html` is never called (it also references an undefined `filteredData`).
 - **Duplicate pages:** `index_api.html` and `index_zhiruo.html` are identical; keep them in sync or remove the copy.
 - **Hard-coded paths** in `api.py` (local data folder, IIS cache path) make moving the server harder.
@@ -468,6 +489,9 @@ Backend changes (`api.py`) only take effect after restarting the backend.
 
 ### October 2026
 
+- **SQL Server account changed** to the read-only account `css_sns_ro_notif` (set in `backend/.flaskenv`).
+- **Popup coordination statistics read live from SNS** (xuzhiruo, PR #2): `notice`, `provn`, `tr_aff_ntw`, `coord_agree_ntw`, `all_aff_ntw` now come from SQL Server `SpaceNetworkSystem.dbo` instead of the weekly `srs_all.mdb`; the comparison tool queries SNS by default and has a new `--source-srs` option.
+- **Res35 (Option 2)** (xuzhiruo, PR #2): based on `dbo.grp_res35`; new Res35 column in the main table; the popup shows the groups and milestones.
 - **Notice detail popup** (by xuzhiruo, PR #1): click a row to see all fields grouped by source, plus live SRS data via the new `/api/details/<ntc_id>` endpoint. New tool `tools/compare_coord_stats.py`.
 - **Dates as dd.mm.yyyy** everywhere (table, popup, pickers, timestamps); Excel export writes real dates.
 - **Refresh policy:** data is refreshed when a user opens the page or clicks Refresh; otherwise once a day (was every 10 minutes).
