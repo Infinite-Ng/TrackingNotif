@@ -4,14 +4,16 @@
 
 The RES156, RES169, and RES123 columns indicate whether a space-network notice qualifies under specific ITU World Radiocommunication Conference (WRC) resolutions related to **Earth Stations in Motion (ESIM)** communicating with space stations in specific frequency bands.
 
-The classification is performed by querying the **SRS database** (`srs_all.mdb`) and applying rule-based logic to each group/beam record.
+The classification is performed by querying the **live SNS database** (SQL Server `sydney.itu.int` / `SpaceNetworkSystem`, schema `dbo`, SELECT only) and applying rule-based logic to each group/beam record. Until October 2026 it read `srs_all.mdb`, the weekly copy of the same tables; the rules did not change.
+
+Unlike Res35 (`dbo.grp_res35`), the SNS database has no table with ready-made ESIM results, so the classification is always rule-based.
 
 ---
 
 ## Data Flow
 
 ```
-SRS Database (srs_all.mdb)                   Main Data (sntrdat.mdb + SQL Server)
+SNS database (SQL Server, dbo)               Main Data (sntrdat.mdb + SQL Server)
 ┌─────────────────────────────┐              ┌──────────────────────────────┐
 │ e_srvcls (service classes)  │              │ final_data[]                 │
 │   └─ grp (groups/beams)     │              │   ├─ ntc_id                  │
@@ -28,9 +30,14 @@ SRS Database (srs_all.mdb)                   Main Data (sntrdat.mdb + SQL Server
 
 | Step | Table(s) | Purpose |
 |------|----------|---------|
-| 1 | `e_srvcls` INNER JOIN `grp` | Get all ESIM groups with their service class (`stn_cls`), frequency range (`freq_min`, `freq_max`), and `ntc_id` |
-| 2 | `notice` | Look up `ntc_type` (G = GSO, N = Non-GSO) for each `ntc_id` from Step 1, batched in groups of 500 |
-| 3 | (in-memory) | Classify each group row individually, then aggregate by `ntc_id` (if ANY group for a notice matches a resolution, that resolution is `True`) |
+| 1 | `dbo.e_srvcls` ⋈ `dbo.grp` ⋈ `dbo.notice` | One query: all distinct ESIM rows (`stn_cls` in UF/UC/UO/US/UU) with frequency range (`freq_min`, `freq_max`), `ntc_id` and `ntc_type` (G = GSO, N = Non-GSO) |
+| 2 | (in-memory) | Classify each row, then aggregate by `ntc_id` (if ANY group for a notice matches a resolution, that resolution is `True`) |
+
+The whole classification takes about 0.5 s (about 17 s when it read `srs_all.mdb`).
+
+### Popup details (`fetch_esim_groups()`)
+
+`GET /api/details/<ntc_id>` returns, for each resolution, whether the notice qualifies and the matching groups (`grp_id`, beam, E/R, frequency range, ESIM class, matching band). The popup's **Resolutions** block shows a Yes/No row per resolution; **Groups ▸** opens the group list.
 
 ### Merge (in `fetch_data()`)
 
@@ -124,20 +131,19 @@ Because the rules use logical **AND** across three criteria, a notice only quali
 Check the Flask backend console for these log lines:
 
 ```
-SRS Step 1: <N> group rows with ESIM classes     ← Total ESIM groups found
-SRS Step 2: <M> ntc_ids with ntc_type            ← How many have orbit type
-ESIM classification complete: <K> ntc_ids        ← Unique notices classified
-ESIM merge: <matched>/<total> records            ← How many main-data notices matched
+ESIM classification: <N> ESIM group rows, <K> notices RES156=.. RES169=.. RES123=..
+ESIM merge: <matched>/<total> records have ESIM groups in SNS (RES156=.. RES169=.. RES123=..)
 ```
 
 ---
 
-## Source Code References
+## Source Code References (`backend/api.py`)
 
-| Component | File | Line(s) |
-|-----------|------|---------|
-| Resolution rules | `backend/api.py` | 132–167 |
-| Frequency overlap check | `backend/api.py` | 170–174 |
-| Single group classifier | `backend/api.py` | 177–191 |
-| ESIM fetch & classify | `backend/api.py` | 193–267 |
-| Merge into main data | `backend/api.py` | 512–524 |
+| Component | Name |
+|-----------|------|
+| Resolution rules | `_RES_RULES` |
+| Frequency overlap check | `_freq_overlaps_any()` |
+| Single group classifier | `_classify_single()` |
+| Classification for the main table | `fetch_esim_resolutions()` |
+| Matching groups for the popup | `fetch_esim_groups()` |
+| Merge into main data | `fetch_data()` |

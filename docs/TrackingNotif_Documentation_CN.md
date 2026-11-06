@@ -32,7 +32,7 @@
 |------|--------|-----------|
 | **SNTrack** | MS Access `sntrdat.mdb` | BR 追踪数据（BRReg 日期、ADM、CIRC/pub、remarks 等） |
 | **e-submission** | SQL Server `SpaceNetworkSystem`（`sydney.itu.int`） | 提交数据（SatName、DateOfReceive、TypeOfSubmission、Status 等） |
-| **SRS** | MS Access `srs_all.mdb` | ESIM 决议标记（Res156/169/123）以及行详情弹窗中的协调信息 |
+| **SNS（SRS 表）** | SQL Server `SpaceNetworkSystem`，schema `dbo`（实时） | 决议标记（Res35、ESIM 的 Res156/169/123）以及行详情弹窗中的协调信息 |
 
 所有数据库均以**只读**方式打开，系统不会写入任何数据库。
 
@@ -58,8 +58,7 @@
    │     /api/details/<ntc_id>        Flask 后端（backend/api.py）  ──┘
    └─────────────────────────────────►  ├── 内存缓存 + 后台刷新线程
                                         ├── SNTrack（sntrdat.mdb，本地副本）
-                                        ├── e-submission（SQL Server）
-                                        └── SRS（srs_all.mdb）
+                                        └── e-submission + SNS 的 SRS 表、Res35、ESIM（SQL Server）
 ```
 
 **用户打开页面时的流程：**
@@ -88,7 +87,9 @@
 |------|------|---------|---------|
 | SNTrack | `\\blue\dfs\br\BR_DATA\SPACE\SNTRACK\sntrdat.mdb`（+ 工作组文件 `sntrapp.mdw`） | `tblSpaceStnNotif` | `ntc_id` |
 | e-submission | SQL Server `sydney.itu.int` / `SpaceNetworkSystem` | `res908.Res908`；Status 来自 `dbo.Submissions` + `dbo.SubmissionsStatus`（经 `SubmissionId`） | `SnsNtcId` = `ntc_id` |
-| SRS | `\\blue\dfs\br\BR_DATA\SPACE\SRS_DB\srs_all.mdb` | `notice`、`grp`、`e_srvcls`、`provn`、`tr_aff_ntw`、`coord_agree_ntw`、`all_aff_ntw`、`grp_aff_rec` | `ntc_id` |
+| SNS（SRS 表，实时） | SQL Server `sydney.itu.int` / `SpaceNetworkSystem`，schema `dbo` | `notice`、`grp`、`e_srvcls`、`provn`、`tr_aff_ntw`、`coord_agree_ntw`、`all_aff_ntw`、`grp_aff_rec`、`srv_cls`、`srv_area`、`grp_res35` | `ntc_id` |
+
+后端运行时不再读取 `srs_all.mdb`（`\\blue\dfs\br\BR_DATA\SPACE\SRS_DB\srs_all.mdb`，SNS 中这些表的每周副本）；它只用于对比脚本的 `--source-srs` 模式。
 
 每次刷新开始时，SNTrack 的 MDB 会先**复制到本地目录**（`api.py` 中的 `LOCAL_DATA_DIR`）再查询，避免网络文件被锁时阻塞后端。复制失败时使用上一次的本地副本。
 
@@ -96,7 +97,7 @@
 
 - **SNTrack：** BRREG、2d_date、ADM、PHASE、tgt_ntc_id、11.32A、11.41、subtoc、SUP、d_val_in、d_check_in、d_spr_out、d_complete、d_wmeeting、CIRC/pub、CIRC2/pub2、CIRC3/pub3、remarks、tex_remarks
 - **e-submission：** DateOfReceive、SatName、long_nom、ntwk_org、act_code、TypeOfSubmission、Status、SNTrack ID（`sntrack_id`）、SubmissionId、InternalReference、DocumentumReference
-- **SRS：** Res156 / Res169 / Res123（规则见 [ESIM_RES_Classification.md](ESIM_RES_Classification.md)），以及行详情弹窗中的 SRS 部分（[第 7 节](#7-notice-详情弹窗与-srs-统计)）。
+- **SNS（实时）：** Res156 / Res169 / Res123（规则见 [ESIM_RES_Classification.md](ESIM_RES_Classification.md)）、Res35（[7.4](#74-res35)），以及行详情弹窗中的 SRS 部分（[第 7 节](#7-notice-详情弹窗与-srs-统计)）。
 
 BRREG（SNTrack）与 DateOfReceive（e-submission）含义相同，但在提交被退回等情况下可能不同。
 
@@ -212,7 +213,16 @@ BRREG（SNTrack）与 DateOfReceive（e-submission）含义相同，但在提交
 
 ### 6.7 列显示
 
-用顶部的列芯片显示/隐藏列，然后点击 **Apply**。设置保存在浏览器（`localStorage`）中。旁边的 **Reset** 恢复默认列。
+用顶部的列芯片显示/隐藏列，然后点击 **Apply**。设置保存在浏览器（`localStorage`）中。旁边的 **Reset** 恢复默认列。（2026 年 10 月修复：此前页面首次打开时默认列设置没有生效，所有列都会显示。）
+
+**数据来源的区分：**
+
+| 位置 | 说明 |
+|------|------|
+| 表头颜色 | 蓝 = SNTrack，绿 = E-submission，橙 = SNS（决议标记）；"Data Preview" 旁有图例。鼠标停在表头上显示具体的库和表。列芯片左侧色条同理。Notice ID 两边都有，不着色。 |
+| **Source** 列 | 每一行来自哪里：`SNTrack`（只在 SNTrack）、`E-submission`（只在 e-submission）、`Both`（两边都有）。表头下拉框可筛选。 |
+
+**Resolutions** 列把适用的决议合在一列显示，如 `Res35, Res123`；表头文本框可筛选（如输入 `Res35`）。单独的 Res156 / Res169 / Res123 / Res35 / Res8 列默认隐藏，可在列芯片中打开，导出时同样可选。
 
 ### 6.8 日期格式
 
@@ -244,15 +254,22 @@ BRREG（SNTrack）与 DateOfReceive（e-submission）含义相同，但在提交
 
 ## 7. Notice 详情弹窗与 SRS 统计
 
-点击一行后弹出详情窗口，按数据来源分为三组：
+点击一行后弹出详情窗口，按数据来源分为以下板块：
 
-| 分组 | 内容 | 来源 |
+| 板块 | 内容 | 来源 |
 |------|------|------|
+| Resolutions | 一张表列出 Res35、Res156、Res169、Res123、Res8 是否适用及依据。Res35 行显示 Option 1 / Option 2 的结论与对比（[7.4](#74-res35)）；ESIM 三行显示命中的 group 数和规则；Res8 行显示 Res 8 提交的卫星数和 `res8_resolves`，或引用它的 Res 8 提交。有命中的行可点 **Groups ▸** / **Stations ▸** 展开明细 | 实时查询 SNS 数据库 |
 | SNTrack | 该行的全部 SNTrack 字段 | 表格数据中已有 |
-| e-submission | 该行的全部 e-submission 字段 | 表格数据中已有 |
-| SRS | Res156/169/123、`prov`、`ntf_occurs`、`prov_desc`、`provn` 与 `tr_aff_ntw` 的协调统计、`coord_agree_ntw` 与 `all_aff_ntw` 的行数 | 实时查询：`GET /api/details/<ntc_id>` |
+| E-submission | 该行的全部 e-submission 字段 | 表格数据中已有 |
+| SRS-notice | `prov`、`ntf_occurs`、`prov_desc` | 实时查询 SNS 数据库 |
+| SRS-provn | `provn` 的 coord_prov、agree_st、coord_st、coord_st details | 实时查询 SNS 数据库 |
+| SRS-others | `tr_aff_ntw`（有无数据、coord_prov、agree_st、coord_st、details）、`coord_agree_ntw` 行数、`all_aff_ntw` 行数 | 实时查询 SNS 数据库 |
 
-空值照常显示字段名、值留空。notice 尚不在 SRS 中（通常是新提交）时显示 *"Notice not found in SRS database."*
+"实时查询"指 `GET /api/details/<ntc_id>` 读取 SQL Server `SpaceNetworkSystem` 中 schema `dbo` 的表（只执行 SELECT）。这些表与 `srs_all.mdb` 的表名、字段相同（`dbo` 表另有 `ValidFrom` / `ValidTo` 两列）；`srs_all.mdb` 每周更新一次，`dbo` 是实时数据。抽查 160 个 notice：`srs_all.mdb` 中有的 143 个，两边结果完全一致；另外 17 个只在 SNS 中（新提交的 notice，以及从未出现在 IFIC 中的部分旧 notice）。SNS 中同名表还有 `ific`（按 IFIC 期号保存的已公布版本）和 `history_dbo`（历史版本）两个 schema，弹窗不使用。
+
+弹窗标题下方有一排板块勾选框，勾选哪些就只显示哪些，默认全选；右侧 **All / None** 为全选 / 全不选。选择保存在浏览器（`localStorage`）中，关闭弹窗、打开其他 notice 或刷新页面后保留。
+
+空值照常显示字段名、值留空。notice 不在 SNS 数据库中时显示 *"Notice not found in SNS database."*
 
 ### 7.1 SRS 表与 notice 的关联方式
 
@@ -286,12 +303,43 @@ BRREG（SNTrack）与 DateOfReceive（e-submission）含义相同，但在提交
 
 ```bat
 tracking_env_32\python.exe tools\compare_coord_stats.py coord_st_statistics_part1.xlsx result.csv
+tracking_env_32\python.exe tools\compare_coord_stats.py coord_st_statistics_part1.xlsx result.csv --source-srs
 tracking_env_32\python.exe tools\compare_coord_stats.py coord_st_statistics_part1.xlsx result.csv --source-mdb
 ```
 
-- 不加参数：查询 `srs_all.mdb`（弹窗实际使用的数据）。
-- `--source-mdb`：改为读取 Excel `mdb_file` 列中各主管部门提交的 MDB（即 Excel 本身的数据来源），用于单独验证统计逻辑。
-- 两者存在差异属于正常：BR 处理会改变数据（例如提交时 coord_st = 'O' 的 adm，在 SRS 中变为 agree_st = 'O'；coord_prov 前缀 `X/` 变为 `11.41/`；tr_aff_ntw 被清空）。
+- 不加参数：查询 SNS 数据库 `dbo`（弹窗实际使用的数据），账号读取 `backend/.flaskenv`。
+- `--source-srs`：改为查询 `srs_all.mdb`（每周副本）。
+- `--source-mdb`：改为读取 Excel `mdb_file` 列中各主管部门提交的 MDB，即 Excel 本身的数据来源，用于单独验证统计逻辑。
+- SNS / `srs_all.mdb` 与提交的 MDB 会有差异：BR 处理后的数据与提交时不同（例如提交时 coord_st = 'O' 的 adm，在 SRS 中变成 agree_st = 'O'；coord_prov 前缀 `X/` 变为 `11.41/`；tr_aff_ntw 被清空）。
+
+---
+
+### 7.4 Res35
+
+Resolution 35 是针对非静止轨道（NGSO）系统的里程碑（milestone）规则，尚未写入 Radio Regulations 第 1 卷（Articles），处于试行阶段，涉及的网络需要单独审查。审查时要对 notice 中的每个 group 判断是否属于 Res35：看它的频段、业务（卫星固定 / 移动 / 广播）、方向（空对地 / 地对空）以及服务区所在的 ITU 区域，是否落在 Res 35 Table 中。
+
+层级关系：Network（notice）→ Beam（group）→ E/R（发 / 收）→ SA_number → Service Area。**只要一个 group 属于 Res35，整个 notice 就属于 Res35。**
+
+两种判断方式都读取 SNS 数据库（SQL Server `SpaceNetworkSystem`，schema `dbo`，只执行 SELECT）：
+
+| 方式 | 规则 | 使用的表 |
+|------|------|---------|
+| Option 2 | group 出现在 `dbo.grp_res35` 中（BR 内部已算好的结果，可直接使用） | `grp_res35.grp_id` → `grp.ntc_id`；同时显示里程碑 `ms_step`、`f_ms_met`、`d_ms_next_deadline` |
+| Option 1 | 按 Resolution 35 (Rev.WRC-23) *resolves* 1 自行判断，用于与 Option 2 交叉验证：非静止轨道（`notice.ntc_type = 'N'`）、已投入使用（`grp.d_inuse` 有值）、频率（`grp.freq_min`–`freq_max`）与 Res 35 Table 中某一频段重叠，且业务与方向在 group 服务区所在的区域符合该频段 | `notice`、`grp`、`srv_cls`、`srv_area` |
+
+Option 1 的业务、方向与区域：
+
+- 业务来自 `srv_cls.stn_cls`：EC = 卫星固定（FSS）；EI / EJ / EU / EG = 卫星移动（MSS）；EB / EV = 卫星广播（BSS）。
+- 方向来自 `grp.emi_rcp`（空间电台视角）：E = 空对地（space-to-Earth），R = 地对空（Earth-to-space）。Table 中未写方向的（如卫星广播）两个方向都适用。
+- 区域来自服务区 `srv_area.ctry`：`XR1` / `XR2` / `XR3` 表示 Region 1 / 2 / 3；没有服务区记录（全球覆盖）时三个区域都适用。数据库中没有"国家 → 区域"的对照表，服务区只写具体国家时无法得到区域，按三个区域都适用处理；若此时区域会影响结论，group 明细中标出 *(check Region)*（截至 2026-10-23 没有这种 group）。
+- 频段表按区域取自 ITU 网站的 RES 35 (Rev. WRC-23) Table，代码中为 `backend/api.py` 的 `_RES35_TABLE`。只在部分区域适用的频段，在 group 明细中注明区域，如 `17.30-17.70 GHz FSS Earth-to-space (R1, R3)`。
+
+显示位置：
+
+- 主表 **Res35** 列：按 Option 2 显示 Yes / 空，每次刷新时更新。
+- 弹窗 **Resolutions** 板块：Res35 行显示是否适用（以 Option 2 为准；若只有 Option 1 判为 Yes，显示 *No (Option 1: Yes)*）、两种方式的结论与对比；点 **Groups ▸** 展开 group 明细（beam、E/R、频率、业务、服务区、Option 1 命中的频段、Option 2 的里程碑）。只被其中一种方式选中的 group 以黄色标出。
+
+截至 2026-10-23 在 SNS 中对全部非静止轨道 notice 的对照（按区域判断）：Option 2 的 140 个 notice 全部被 Option 1 找到；Option 1 另外多出 34 个 notice（大多为 1995–2005 年、状态已变更的旧 notice）。group 层面 48,298 个一致；只在 Option 2 中的 662 个，其中 660 个为测控类 group（station class 为 EK / ER / ED），另外 2 个（notice 118512047 的 group 118745599、118745614：17.3–17.7 GHz 卫星固定空对地，服务区 XR2、XR3）按 Res 35 Table 该方向只适用于 Region 1，Option 1 未选入，**待确认**。按区域判断与不按区域相比，只少选了 6 个 group，notice 结论不变。
 
 ---
 
@@ -303,7 +351,7 @@ tracking_env_32\python.exe tools\compare_coord_stats.py coord_st_statistics_part
 |------|------|:---:|------|
 | GET | `/api/data` | ✓ | 返回内存缓存：`{success, count, timestamp, stale, data}`。首次数据载入前返回 `503`。 |
 | POST / GET | `/api/refresh` | ✓ | 安排一次后台刷新，立即返回 `202` 及 `current_timestamp`。 |
-| GET | `/api/details/<ntc_id>` | ✓ | 单个 notice 的 SRS 字段（弹窗用）。`ntc_id` 非数字返回 `400`；`srs_all.mdb` 不可达返回 `503`；查询出错返回 `500`。 |
+| GET | `/api/details/<ntc_id>` | ✓ | 单个 notice 的协调统计与 Res35（弹窗用），实时查询 SNS 数据库：`{success, details, res35, errors}`。`ntc_id` 非数字返回 `400`；SNS 数据库不可达返回 `503`；两部分都查询出错返回 `500`（只有一部分出错时返回另一部分，错误写在 `errors`）。 |
 | GET | `/api/health` | — | `{"status": "healthy", "timestamp": ...}` |
 | GET | `/`、`/index_api.html`、`/<文件>` | — | 提供 `frontend/` 目录中的文件。 |
 
@@ -352,7 +400,8 @@ IIS 共享目录中的 `index_api_.html` 是 2026 年 10 月改动**之前**的�
 | `SQL_SERVER_DB` | | `SpaceNetworkSystem` | SQL Server 数据库 |
 | `SQL_SERVER_USER` | | `sns_a` | SQL Server 用户 |
 | `MDB_USER` | | `spruser01` | SNTrack MDB 用户 |
-| `SRS_MDB_PATH` | | `\\blue\dfs\br\BR_DATA\SPACE\SRS_DB\srs_all.mdb` | SRS 数据库 |
+| `SRS_MDB_PATH` | | `\\blue\dfs\br\BR_DATA\SPACE\SRS_DB\srs_all.mdb` | SRS 每周副本（只用于对比脚本） |
+| `IIS_CACHE_PATH` | | `\\intweb.itu.int\intwebroot\ITU-R\space\css\notification\data\cached_data.json` | 刷新后同时写入的 IIS 缓存文件。**开发电脑上设为空值**（`IIS_CACHE_PATH=`），否则本地测试会覆盖正式页面的缓存 |
 | `REFRESH_INTERVAL_SECONDS` | | `86400`（1 天） | 自动刷新间隔 |
 | `FRONTEND_ORIGIN` | | — | 额外的 CORS 来源，逗号分隔 |
 
@@ -443,7 +492,7 @@ C:\Users\xianwu\Anaconda3\python.exe generate_cert.py
 | 点击 Refresh 无反应，后端日志没有请求 | 后端未运行，或以**纯 HTTP** 方式运行 | `curl.exe -k https://156.106.168.185:5001/api/health`；失败则检查启动方式（[10.3](#103-启动后端)） |
 | 显示 "Server not reachable – showing cached data" | 后端未运行，或该浏览器未信任证书 | 检查后端；按[第 5 节](#5-首次使用设置每个浏览器一次)操作 |
 | 后端启动即报错 `ssl.SSLError: [SSL] PEM lib` | `cert.pem` / `key.pem` 为空或无效 | 重新生成证书（[10.5](#105-ssl-证书)） |
-| 弹窗显示 "Could not load SRS data" | 后端不可达，或 `srs_all.mdb` 不可达 | 检查后端和 `\\blue` 共享 |
+| 弹窗显示 "Could not load SRS data" 或 "SNS database not reachable" | 后端不可达，或 SQL Server 不可达 / 账号无效 | 检查后端，以及 `.flaskenv` 中的 SQL Server 账号 |
 | 刷新显示 "Refresh may be incomplete" / "Refresh timed out" | 刷新时间超过轮询窗口（约 70 秒） | 查看后端日志中数据库连接是否缓慢或失败 |
 | `429 Too Many Requests` | 触发限流（每 IP 每分钟 30 次） | 等待一分钟 |
 | 刷新后数据没有变化 | 某个数据库连接失败，保留了旧数据（`stale: true`） | 检查 `.flaskenv` 中的凭据和日志 |
@@ -458,7 +507,8 @@ C:\Users\xianwu\Anaconda3\python.exe generate_cert.py
 - **后端不是 Windows 服务。** 重启或注销后会停止。可考虑开机计划任务或服务包装。
 - **待确认规则：** 弹窗中 `all_aff_ntw` 的关联方式（[7.1](#71-srs-表与-notice-的关联方式)）。
 - **无用代码：** `index_api.html` 中的 `loadDataFromAPI()` 从未被调用（其中还引用了未定义的 `filteredData`）。
-- **重复页面：** `index_api.html` 与 `index_zhiruo.html` 内容相同，需保持同步或删除副本。
+- **重复页面：** `index_api.html` 与 `index_zhiruo.html` 内容相同（2026-10-23 已再次同步），需保持同步或删除副本。
+- **Res8 规则：** 目前按 `dbo.res8_sp_stn` 中是否有数据判断（notice 本身是 Res 8 提交，或其卫星被 Res 8 提交引用），尚未按决议条文自行计算。
 - **写死的路径**（本地数据目录、IIS 缓存路径）使服务器迁移更困难。
 - `requirements.txt` 缺少 `cryptography`（`generate_cert.py` 需要）。
 
@@ -468,6 +518,14 @@ C:\Users\xianwu\Anaconda3\python.exe generate_cert.py
 
 ### 2026 年 10 月
 
+- **主表区分数据来源**（xuzhiruo）：表头按来源着色并附图例、悬停说明；新增 Source 列（SNTrack / E-submission / Both）。
+- **Resolutions 合并列与 Res8**（xuzhiruo）：主表新增 Resolutions 列（Res35、Res156、Res169、Res123、Res8），单独的决议列默认隐藏；Res8 按 `dbo.res8_sp_stn` 判断，弹窗中可展开卫星列表。
+- **修复默认列不生效**（xuzhiruo）：页面首次打开时按默认 / 已保存的列设置显示。
+- **ESIM（Res156/169/123）改为实时查询 SNS 数据库**（xuzhiruo）：规则不变，改为对 `SpaceNetworkSystem.dbo` 的一次查询，分类耗时由约 17 秒降至约 0.5 秒；弹窗中可展开命中的 group。SNS 比 `srs_all.mdb` 多收录新提交的 notice 和部分 `st_cur = 51` 的协调请求，因此 Res156 标记的 notice 增多。
+- **新增 `IIS_CACHE_PATH` 设置**（xuzhiruo）：开发电脑设为空值，避免本地测试覆盖正式页面的缓存文件。
+- **弹窗的协调统计改为实时查询 SNS 数据库**（xuzhiruo）：`provn`、`tr_aff_ntw`、`coord_agree_ntw`、`all_aff_ntw` 改读 SQL Server `SpaceNetworkSystem.dbo`，不再读每周更新的 `srs_all.mdb`；对比脚本新增 `--source-srs`。
+- **Res35**（xuzhiruo）：主表 Res35 列（Option 2）；弹窗 Resolutions 板块合并 Res35 与 Res156/169/123，Res35 按 Option 1（按区域判断）与 Option 2 交叉验证。
+- **弹窗板块筛选**（xuzhiruo）：弹窗顶部勾选要显示的板块，选择保存在浏览器。
 - **Notice 详情弹窗**（xuzhiruo，PR #1）：点击行查看按来源分组的全部字段，并通过新接口 `/api/details/<ntc_id>` 实时获取 SRS 数据。新增工具 `tools/compare_coord_stats.py`。
 - **日期统一为 dd.mm.yyyy**（表格、弹窗、日期选择器、时间戳）；Excel 导出写入真正的日期。
 - **刷新策略：** 用户打开页面或点击 Refresh 时刷新；否则每天一次（原为每 10 分钟）。

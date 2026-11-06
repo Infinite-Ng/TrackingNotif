@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "tracking-api",
+      "runtimeExecutable": "C:\\Users\\xuzhi\\AppData\\Local\\anaconda3\\envs\\tracking_env_32\\python.exe",
+      "runtimeArgs": ["backend/api.py"],
+      "port": 5001
+    }
+  ]
+}
