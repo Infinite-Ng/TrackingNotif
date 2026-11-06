@@ -32,7 +32,7 @@
 |------|--------|-----------|
 | **SNTrack** | MS Access `sntrdat.mdb` | BR 追踪数据（BRReg 日期、ADM、CIRC/pub、remarks 等） |
 | **e-submission** | SQL Server `SpaceNetworkSystem`（`sydney.itu.int`） | 提交数据（SatName、DateOfReceive、TypeOfSubmission、Status 等） |
-| **SNS（SRS 表）** | SQL Server `SpaceNetworkSystem`，schema `dbo`（实时） | 决议标记（Res35、ESIM 的 Res156/169/123）以及行详情弹窗中的协调信息 |
+| **SNS（SRS 表）** | SQL Server `SpaceNetworkSystem`，schema `dbo`（实时） | 决议标记（Res35 Option 1/2、ESIM 的 Res156/169/123、Res8）以及行详情弹窗中的协调信息 |
 
 所有数据库均以**只读**方式打开，系统不会写入任何数据库。
 
@@ -58,7 +58,7 @@
    │     /api/details/<ntc_id>        Flask 后端（backend/api.py）  ──┘
    └─────────────────────────────────►  ├── 内存缓存 + 后台刷新线程
                                         ├── SNTrack（sntrdat.mdb，本地副本）
-                                        └── e-submission + SNS 的 SRS 表、Res35、ESIM（SQL Server）
+└── e-submission + SNS 的 SRS 表、Res35、ESIM、Res8（SQL Server）
 ```
 
 **用户打开页面时的流程：**
@@ -87,7 +87,7 @@
 |------|------|---------|---------|
 | SNTrack | `\\blue\dfs\br\BR_DATA\SPACE\SNTRACK\sntrdat.mdb`（+ 工作组文件 `sntrapp.mdw`） | `tblSpaceStnNotif` | `ntc_id` |
 | e-submission | SQL Server `sydney.itu.int` / `SpaceNetworkSystem` | `res908.Res908`；Status 来自 `dbo.Submissions` + `dbo.SubmissionsStatus`（经 `SubmissionId`） | `SnsNtcId` = `ntc_id` |
-| SNS（SRS 表，实时） | SQL Server `sydney.itu.int` / `SpaceNetworkSystem`，schema `dbo` | `notice`、`grp`、`e_srvcls`、`provn`、`tr_aff_ntw`、`coord_agree_ntw`、`all_aff_ntw`、`grp_aff_rec`、`srv_cls`、`srv_area`、`grp_res35` | `ntc_id` |
+| **SNS（SRS 表，实时）** | SQL Server `SpaceNetworkSystem`，schema `dbo`（实时） | 决议标记（Res35 Option 1/2、ESIM 的 Res156/169/123、Res8）以及行详情弹窗中的协调信息 | `ntc_id` |
 
 后端运行时不再读取 `srs_all.mdb`（`\\blue\dfs\br\BR_DATA\SPACE\SRS_DB\srs_all.mdb`，SNS 中这些表的每周副本）；它只用于对比脚本的 `--source-srs` 模式。
 
@@ -97,7 +97,7 @@
 
 - **SNTrack：** BRREG、2d_date、ADM、PHASE、tgt_ntc_id、11.32A、11.41、subtoc、SUP、d_val_in、d_check_in、d_spr_out、d_complete、d_wmeeting、CIRC/pub、CIRC2/pub2、CIRC3/pub3、remarks、tex_remarks
 - **e-submission：** DateOfReceive、SatName、long_nom、ntwk_org、act_code、TypeOfSubmission、Status、SNTrack ID（`sntrack_id`）、SubmissionId、InternalReference、DocumentumReference
-- **SNS（实时）：** Res156 / Res169 / Res123（规则见 [ESIM_RES_Classification.md](ESIM_RES_Classification.md)）、Res35（[7.4](#74-res35)），以及行详情弹窗中的 SRS 部分（[第 7 节](#7-notice-详情弹窗与-srs-统计)）。
+- **SNS（实时）：** Res156 / Res169 / Res123（规则见 [ESIM_RES_Classification.md](ESIM_RES_Classification.md)）、Res35（Option 1 & Option 2，见 [7.4](#74-res35)）、Res8（[7.5](#75-res8)），以及行详情弹窗中的 SRS 部分（[第 7 节](#7-notice-详情弹窗与-srs-统计)）。
 
 BRREG（SNTrack）与 DateOfReceive（e-submission）含义相同，但在提交被退回等情况下可能不同。
 
@@ -260,8 +260,12 @@ BRREG（SNTrack）与 DateOfReceive（e-submission）含义相同，但在提交
 |------|------|------|
 | Resolutions | 一张表列出 Res35、Res156、Res169、Res123、Res8 是否适用及依据。Res35 行显示 Option 1 / Option 2 的结论与对比（[7.4](#74-res35)）；ESIM 三行显示命中的 group 数和规则；Res8 行显示 Res 8 提交的卫星数和 `res8_resolves`，或引用它的 Res 8 提交。有命中的行可点 **Groups ▸** / **Stations ▸** 展开明细 | 实时查询 SNS 数据库 |
 | SNTrack | 该行的全部 SNTrack 字段 | 表格数据中已有 |
+| 板块 | 内容 | 来源 |
+|------|------|------|
+| Resolutions | 一张表列出 Res35、Res156、Res169、Res123、Res8 是否适用及依据。Res35 行显示 Option 1 / Option 2 的结论与对比（[7.4](#74-res35)）；ESIM 三行显示命中的 group 数和规则；Res8 行显示 Res 8 提交的卫星数和 `res8_resolves`，或引用它的 Res 8 提交。有命中的行可点 **Groups ▸** / **Stations ▸** 展开明细 | 实时查询 SNS 数据库 |
+| SNTrack | 该行的全部 SNTrack 字段 | 表格数据中已有 |
 | E-submission | 该行的全部 e-submission 字段 | 表格数据中已有 |
-| SRS-notice | `prov`、`ntf_occurs`、`prov_desc` | 实时查询 SNS 数据库 |
+| SRS-notice | `prov``ntf_occurs``prov_desc` | 实时查询 SNS 数据库 |
 | SRS-provn | `provn` 的 coord_prov、agree_st、coord_st、coord_st details | 实时查询 SNS 数据库 |
 | SRS-others | `tr_aff_ntw`（有无数据、coord_prov、agree_st、coord_st、details）、`coord_agree_ntw` 行数、`all_aff_ntw` 行数 | 实时查询 SNS 数据库 |
 
@@ -271,7 +275,9 @@ BRREG（SNTrack）与 DateOfReceive（e-submission）含义相同，但在提交
 
 空值照常显示字段名、值留空。notice 不在 SNS 数据库中时显示 *"Notice not found in SNS database."*
 
-### 7.1 SRS 表与 notice 的关联方式
+空值照常显示字段名、值留空。notice 不在 SNS 数据库中时显示 *"Notice not found in SNS database."*
+
+### 7.1 SRS 表与 notice 的关联方式（SNS `dbo` 与 `srs_all.mdb` 相同）
 
 | 表 | 关联方式 |
 |----|---------|
@@ -309,8 +315,10 @@ tracking_env_32\python.exe tools\compare_coord_stats.py coord_st_statistics_part
 
 - 不加参数：查询 SNS 数据库 `dbo`（弹窗实际使用的数据），账号读取 `backend/.flaskenv`。
 - `--source-srs`：改为查询 `srs_all.mdb`（每周副本）。
-- `--source-mdb`：改为读取 Excel `mdb_file` 列中各主管部门提交的 MDB，即 Excel 本身的数据来源，用于单独验证统计逻辑。
-- SNS / `srs_all.mdb` 与提交的 MDB 会有差异：BR 处理后的数据与提交时不同（例如提交时 coord_st = 'O' 的 adm，在 SRS 中变成 agree_st = 'O'；coord_prov 前缀 `X/` 变为 `11.41/`；tr_aff_ntw 被清空）。
+- `
+--source-mdb`：改为读取 Excel `mdb_file` 列中各主管部门提交的 MDB，即 Excel 本身的数据来源，用于单独验证统计逻辑。
+- 
+SNS / `srs_all.mdb` 与提交的 MDB 会有差异：BR 处理后的数据与提交时不同（例如提交时 coord_st = 'O' 的 adm，在 SRS 中变成 agree_st = 'O'；coord_prov 前缀 `X/` 变为 `11.41/`；tr_aff_ntw 被清空）。
 
 ---
 
@@ -329,15 +337,21 @@ Resolution 35 是针对非静止轨道（NGSO）系统的里程碑（milestone�
 
 Option 1 的业务、方向与区域：
 
-- 业务来自 `srv_cls.stn_cls`：EC = 卫星固定（FSS）；EI / EJ / EU / EG = 卫星移动（MSS）；EB / EV = 卫星广播（BSS）。
-- 方向来自 `grp.emi_rcp`（空间电台视角）：E = 空对地（space-to-Earth），R = 地对空（Earth-to-space）。Table 中未写方向的（如卫星广播）两个方向都适用。
-- 区域来自服务区 `srv_area.ctry`：`XR1` / `XR2` / `XR3` 表示 Region 1 / 2 / 3；没有服务区记录（全球覆盖）时三个区域都适用。数据库中没有"国家 → 区域"的对照表，服务区只写具体国家时无法得到区域，按三个区域都适用处理；若此时区域会影响结论，group 明细中标出 *(check Region)*（截至 2026-10-23 没有这种 group）。
-- 频段表按区域取自 ITU 网站的 RES 35 (Rev. WRC-23) Table，代码中为 `backend/api.py` 的 `_RES35_TABLE`。只在部分区域适用的频段，在 group 明细中注明区域，如 `17.30-17.70 GHz FSS Earth-to-space (R1, R3)`。
+- 
+业务来自 `srv_cls.stn_cls`：EC = 卫星固定（FSS）；EI / EJ / EU / EG = 卫星移动（MSS）；EB / EV = 卫星广播（BSS）。
+- 
+方向来自 `grp.emi_rcp`（空间电台视角）：E = 空对地（space-to-Earth），R = 地对空（Earth-to-space）。Table 中未写方向的（如卫星广播）两个方向都适用。
+- 
+区域来自服务区 `srv_area.ctry`：`XR1` / `XR2` / `XR3` 表示 Region 1 / 2 / 3；没有服务区记录（全球覆盖）时三个区域都适用。数据库中没有"国家 → 区域"的对照表，服务区只写具体国家时无法得到区域，按三个区域都适用处理；若此时区域会影响结论，group 明细中标出 *(check Region)*（截至 2026-10-23 没有这种 group）。
+- 
+频段表按区域取自 ITU 网站的 RES 35 (Rev. WRC-23) Table，代码中为 `backend/api.py` 的 `_RES35_TABLE`。只在部分区域适用的频段，在 group 明细中注明区域，如 `17.30-17.70 GHz FSS Earth-to-space (R1, R3)`。
 
 显示位置：
 
-- 主表 **Res35** 列：按 Option 2 显示 Yes / 空，每次刷新时更新。
-- 弹窗 **Resolutions** 板块：Res35 行显示是否适用（以 Option 2 为准；若只有 Option 1 判为 Yes，显示 *No (Option 1: Yes)*）、两种方式的结论与对比；点 **Groups ▸** 展开 group 明细（beam、E/R、频率、业务、服务区、Option 1 命中的频段、Option 2 的里程碑）。只被其中一种方式选中的 group 以黄色标出。
+- 
+主表 **Res35** 列：按 Option 2 显示 Yes / 空，每次刷新时更新。
+- 
+弹窗 **Resolutions** 板块：Res35 行显示是否适用（以 Option 2 为准；若只有 Option 1 判为 Yes，显示 *No (Option 1: Yes)*）、两种方式的结论与对比；点 **Groups ▸** 展开 group 明细（beam、E/R、频率、业务、服务区、Option 1 命中的频段、Option 2 的里程碑）。只被其中一种方式选中的 group 以黄色标出。
 
 截至 2026-10-23 在 SNS 中对全部非静止轨道 notice 的对照（按区域判断）：Option 2 的 140 个 notice 全部被 Option 1 找到；Option 1 另外多出 34 个 notice（大多为 1995–2005 年、状态已变更的旧 notice）。group 层面 48,298 个一致；只在 Option 2 中的 662 个，其中 660 个为测控类 group（station class 为 EK / ER / ED），另外 2 个（notice 118512047 的 group 118745599、118745614：17.3–17.7 GHz 卫星固定空对地，服务区 XR2、XR3）按 Res 35 Table 该方向只适用于 Region 1，Option 1 未选入，**待确认**。按区域判断与不按区域相比，只少选了 6 个 group，notice 结论不变。
 
@@ -398,7 +412,7 @@ IIS 共享目录中的 `index_api_.html` 是 2026 年 10 月改动**之前**的�
 | `MDB_PASSWORD` | ✓ | — | SNTrack MDB 密码 |
 | `SQL_SERVER_HOST` | | `sydney.itu.int` | SQL Server 主机 |
 | `SQL_SERVER_DB` | | `SpaceNetworkSystem` | SQL Server 数据库 |
-| `SQL_SERVER_USER` | | `sns_a` | SQL Server 用户 |
+| `SQL_SERVER_USER` | | `css_sns_ro_notif`（只读） | SQL Server 用户 |
 | `MDB_USER` | | `spruser01` | SNTrack MDB 用户 |
 | `SRS_MDB_PATH` | | `\\blue\dfs\br\BR_DATA\SPACE\SRS_DB\srs_all.mdb` | SRS 每周副本（只用于对比脚本） |
 | `IIS_CACHE_PATH` | | `\\intweb.itu.int\intwebroot\ITU-R\space\css\notification\data\cached_data.json` | 刷新后同时写入的 IIS 缓存文件。**开发电脑上设为空值**（`IIS_CACHE_PATH=`），否则本地测试会覆盖正式页面的缓存 |
@@ -505,7 +519,7 @@ C:\Users\xianwu\Anaconda3\python.exe generate_cert.py
 
 - **自签名证书带来的不便。** 每个用户都要在每个浏览器中信任一次证书。更好的做法是让 API 经过 IIS 转发，页面只访问自身站点。`web.config` 已有规则 `api/*` → `http://156.106.168.185:5000`，但目前返回 **IIS 错误 500.50**（URL Rewrite，访问被拒绝），最可能的原因是规则设置了 `HTTP_X_FORWARDED_HOST`，而该服务器变量不在服务器允许列表中。修复需要 IIS 管理员（或删除该 `<serverVariables>` 段），然后用 waitress 以 HTTP 方式在 5000 端口运行后端，并把 `BACKEND_URL` 改为相对路径 `api/`。
 - **后端不是 Windows 服务。** 重启或注销后会停止。可考虑开机计划任务或服务包装。
-- **待确认规则：** 弹窗中 `all_aff_ntw` 的关联方式（[7.1](#71-srs-表与-notice-的关联方式)）。
+- **待确认规则：** 弹窗中 `all_aff_ntw` 的关联方式（[7.1](#71-srs-表与-notice-的关联方式sns-dbo-与-srs_allmdb-相同)）。
 - **无用代码：** `index_api.html` 中的 `loadDataFromAPI()` 从未被调用（其中还引用了未定义的 `filteredData`）。
 - **重复页面：** `index_api.html` 与 `index_zhiruo.html` 内容相同（2026-10-23 已再次同步），需保持同步或删除副本。
 - **Res8 规则：** 目前按 `dbo.res8_sp_stn` 中是否有数据判断（notice 本身是 Res 8 提交，或其卫星被 Res 8 提交引用），尚未按决议条文自行计算。

@@ -138,7 +138,7 @@ SQL_SERVER_CONN_STRING = (
     "DRIVER={SQL Server};"
     f"SERVER={os.environ.get('SQL_SERVER_HOST', 'sydney.itu.int')};"
     f"DATABASE={os.environ.get('SQL_SERVER_DB', 'SpaceNetworkSystem')};"
-    f"UID={os.environ.get('SQL_SERVER_USER', 'sns_a')};"
+    f"UID={os.environ.get('SQL_SERVER_USER', 'css_sns_ro_notif')};"
     f"PWD={_require_secret('SQL_SERVER_PASSWORD')};"
 )
 
@@ -389,7 +389,6 @@ def fetch_esim_resolutions():
         conn.close()
     return result
 
-
 def fetch_esim_groups(ntc_id, conn):
     """Groups of one notice that make it RES156 / RES169 / RES123 (popup details)."""
     cursor = conn.cursor()
@@ -487,9 +486,9 @@ def _res35_regions(service_area):
     return {1, 2, 3}, not service_area
 # Space station class (srv_cls.stn_cls) -> service of the Res 35 Table
 _RES35_SERVICE_OF_CLASS = {
-    'EC': _RES35_FSS,                                                  # fixed-satellite
+    'EC': _RES35_FSS,                                                   # fixed-satellite
     'EI': _RES35_MSS, 'EJ': _RES35_MSS, 'EU': _RES35_MSS, 'EG': _RES35_MSS,  # mobile-satellite
-    'EB': _RES35_BSS, 'EV': _RES35_BSS,                                # broadcasting-satellite
+    'EB': _RES35_BSS, 'EV': _RES35_BSS,                                 # broadcasting-satellite
 }
 
 
@@ -511,7 +510,6 @@ def _res35_matching_bands(freq_min_mhz, freq_max_mhz, emi_rcp, station_classes, 
                     hits.append(f'{lo:.2f}-{hi:.2f} GHz {service} {direction}{label}')
     return hits
 
-
 def _iso(value):
     return value.isoformat() if isinstance(value, (date, datetime)) else value
 
@@ -526,30 +524,30 @@ def fetch_res35(ntc_id, conn):
         return result
 
     cursor.execute("""
-        SELECT grp_id, beam_name, emi_rcp, freq_min, freq_max, d_inuse
-        FROM dbo.grp WHERE ntc_id = ?
-    """, ntc_id)
+            SELECT grp_id, beam_name, emi_rcp, freq_min, freq_max, d_inuse
+            FROM dbo.grp WHERE ntc_id = ?
+        """, ntc_id)
     groups = {r[0]: {'grp_id': r[0], 'beam_name': _clean(r[1]), 'emi_rcp': _clean(r[2]),
                      'freq_min': r[3], 'freq_max': r[4], 'd_inuse': _iso(r[5]), 'stn_cls': []}
               for r in cursor.fetchall()}
     cursor.execute("""
-        SELECT s.grp_id, s.stn_cls FROM dbo.srv_cls s
-        INNER JOIN dbo.grp g ON g.grp_id = s.grp_id WHERE g.ntc_id = ?
-    """, ntc_id)
+            SELECT s.grp_id, s.stn_cls FROM dbo.srv_cls s
+            INNER JOIN dbo.grp g ON g.grp_id = s.grp_id WHERE g.ntc_id = ?
+        """, ntc_id)
     for grp_id, stn_cls in cursor.fetchall():
         stn_cls = _clean(stn_cls)
         if grp_id in groups and stn_cls and stn_cls not in groups[grp_id]['stn_cls']:
             groups[grp_id]['stn_cls'].append(stn_cls)
     cursor.execute("""
-        SELECT r.grp_id, r.ms_step, r.f_ms_met, r.d_ms_next_deadline FROM dbo.grp_res35 r
-        INNER JOIN dbo.grp g ON g.grp_id = r.grp_id WHERE g.ntc_id = ?
-    """, ntc_id)
+            SELECT r.grp_id, r.ms_step, r.f_ms_met, r.d_ms_next_deadline FROM dbo.grp_res35 r
+            INNER JOIN dbo.grp g ON g.grp_id = r.grp_id WHERE g.ntc_id = ?
+        """, ntc_id)
     milestones = {r[0]: {'ms_step': _clean(r[1]), 'f_ms_met': _clean(r[2]),
                          'd_ms_next_deadline': _iso(r[3])} for r in cursor.fetchall()}
     cursor.execute("""
-        SELECT s.grp_id, s.ctry FROM dbo.srv_area s
-        INNER JOIN dbo.grp g ON g.grp_id = s.grp_id WHERE g.ntc_id = ?
-    """, ntc_id)
+            SELECT s.grp_id, s.ctry FROM dbo.srv_area s
+            INNER JOIN dbo.grp g ON g.grp_id = s.grp_id WHERE g.ntc_id = ?
+        """, ntc_id)
     for grp_id, ctry in cursor.fetchall():
         ctry = _clean(ctry)
         if grp_id in groups and ctry:
@@ -591,15 +589,15 @@ def fetch_res8(ntc_id, conn):
     """Res 8 information of one notice (SELECT only)."""
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT itu_sat_id, sp_stn_name, res8_resolves FROM dbo.res8_sp_stn WHERE ntc_id = ?
-        ORDER BY itu_sat_id
-    """, ntc_id)
+            SELECT itu_sat_id, sp_stn_name, res8_resolves FROM dbo.res8_sp_stn WHERE ntc_id = ?
+            ORDER BY itu_sat_id
+        """, ntc_id)
     own = [{'itu_sat_id': _clean(r[0]), 'sp_stn_name': _clean(r[1]), 'res8_resolves': _clean(r[2])}
            for r in cursor.fetchall()]
     cursor.execute("""
-        SELECT ntc_id, COUNT(*) FROM dbo.res8_sp_stn
-        WHERE itu_sat_id LIKE ? GROUP BY ntc_id ORDER BY ntc_id
-    """, f'{ntc_id}[_]%')
+            SELECT ntc_id, COUNT(*) FROM dbo.res8_sp_stn
+            WHERE itu_sat_id LIKE ? GROUP BY ntc_id ORDER BY ntc_id
+        """, f'{ntc_id}[_]%')
     referenced_by = [{'ntc_id': r[0], 'stations': r[1]} for r in cursor.fetchall()]
     resolves = {}
     for s in own:
@@ -617,11 +615,11 @@ def fetch_res8_notice_ids():
     try:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT ntc_id FROM dbo.res8_sp_stn
-            UNION
-            SELECT TRY_CAST(LEFT(itu_sat_id, CHARINDEX('_', itu_sat_id) - 1) AS int)
-            FROM dbo.res8_sp_stn WHERE CHARINDEX('_', itu_sat_id) > 1
-        """)
+                SELECT ntc_id FROM dbo.res8_sp_stn
+                UNION
+                SELECT TRY_CAST(LEFT(itu_sat_id, CHARINDEX('_', itu_sat_id) - 1) AS int)
+                FROM dbo.res8_sp_stn WHERE CHARINDEX('_', itu_sat_id) > 1
+            """)
         return {str(r[0]) for r in cursor.fetchall() if r[0] is not None}
     except Exception as e:
         logger.error(f"Error fetching Res8 notices: {e}")
@@ -947,7 +945,6 @@ def fetch_data():
         row['RES35'] = str(row.get('ntc_id', '')) in res35_ids
     logger.info(f"Res35 merge: {sum(1 for r in final_data if r['RES35'])} records"
                 f" ({len(res35_ids)} Res35 notices in SNS)")
-
     # --- Res8 (Res 8 submission, or referenced by one) ---
     res8_ids = fetch_res8_notice_ids()
     for row in final_data:
@@ -1144,7 +1141,45 @@ def refresh_data():
 @app.route('/api/details/<ntc_id>', methods=['GET'])
 @rate_limit
 def get_notice_details(ntc_id):
-    """Coordination statistics and Res35 status for one notice (used by the row-click popup),
+    @app.route('/api/details/<ntc_id>', methods=['GET'])
+    @rate_limit
+    def get_notice_details(ntc_id):
+        """Coordination statistics and Resolutions status (Res35, ESIM, Res8) for one notice (used by the row-click popup),
+        read live from the SNS database (SQL Server, dbo). The parts are queried
+        independently: if one fails the others are still returned."""
+        if not ntc_id.isdigit():
+            return jsonify({'success': False, 'error': 'ntc_id must be numeric'}), 400
+        conn = get_sql_server_connection()
+        if not conn:
+            return jsonify({'success': False, 'error': 'SNS database not reachable'}), 503
+        details, res35, esim, res8, errors = None, None, None, None, []
+        try:
+            try:
+                details = fetch_notice_details(int(ntc_id), conn)
+            except Exception as e:
+                logger.error(f"Error fetching coordination details for ntc_id={ntc_id}: {e}")
+                errors.append('Failed to query coordination data')
+            try:
+                res35 = fetch_res35(int(ntc_id), conn)
+            except Exception as e:
+                logger.error(f"Error fetching Res35 for ntc_id={ntc_id}: {e}")
+                errors.append('Failed to query Res35 data')
+            try:
+                esim = fetch_esim_groups(int(ntc_id), conn)
+            except Exception as e:
+                logger.error(f"Error fetching ESIM groups for ntc_id={ntc_id}: {e}")
+                errors.append('Failed to query ESIM data')
+            try:
+                res8 = fetch_res8(int(ntc_id), conn)
+            except Exception as e:
+                logger.error(f"Error fetching Res8 for ntc_id={ntc_id}: {e}")
+                errors.append('Failed to query Res8 data')
+        finally:
+            conn.close()
+        if details is None and res35 is None and esim is None and res8 is None:
+            return jsonify({'success': False, 'error': '; '.join(errors)}), 500
+        return jsonify({'success': True, 'ntc_id': ntc_id, 'details': details, 'res35': res35,
+                        'esim': esim, 'res8': res8, 'errors': errors})
     read live from the SNS database (SQL Server, dbo). The two parts are queried
     independently: if one fails the other is still returned."""
     if not ntc_id.isdigit():
@@ -1164,24 +1199,24 @@ def get_notice_details(ntc_id):
         except Exception as e:
             logger.error(f"Error fetching Res35 for ntc_id={ntc_id}: {e}")
             errors.append('Failed to query Res35 data')
-        esim = None
-        try:
-            esim = fetch_esim_groups(int(ntc_id), conn)
-        except Exception as e:
-            logger.error(f"Error fetching ESIM groups for ntc_id={ntc_id}: {e}")
-            errors.append('Failed to query ESIM data')
-        res8 = None
-        try:
-            res8 = fetch_res8(int(ntc_id), conn)
-        except Exception as e:
-            logger.error(f"Error fetching Res8 for ntc_id={ntc_id}: {e}")
-            errors.append('Failed to query Res8 data')
-    finally:
-        conn.close()
-    if details is None and res35 is None and esim is None and res8 is None:
-        return jsonify({'success': False, 'error': '; '.join(errors)}), 500
-    return jsonify({'success': True, 'ntc_id': ntc_id, 'details': details, 'res35': res35,
-                    'esim': esim, 'res8': res8, 'errors': errors})
+    esim = None
+            try:
+                esim = fetch_esim_groups(int(ntc_id), conn)
+            except Exception as e:
+                logger.error(f"Error fetching ESIM groups for ntc_id={ntc_id}: {e}")
+                errors.append('Failed to query ESIM data')
+            res8 = None
+            try:
+                res8 = fetch_res8(int(ntc_id), conn)
+            except Exception as e:
+                logger.error(f"Error fetching Res8 for ntc_id={ntc_id}: {e}")
+                errors.append('Failed to query Res8 data')
+        finally:
+            conn.close()
+        if details is None and res35 is None and esim is None and res8 is None:
+            return jsonify({'success': False, 'error': '; '.join(errors)}), 500
+        return jsonify({'success': True, 'ntc_id': ntc_id, 'details': details, 'res35': res35,
+                        'esim': esim, 'res8': res8, 'errors': errors})
 
 
 @app.route('/api/health', methods=['GET'])
