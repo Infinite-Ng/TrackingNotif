@@ -1141,83 +1141,56 @@ def refresh_data():
 @app.route('/api/details/<ntc_id>', methods=['GET'])
 @rate_limit
 def get_notice_details(ntc_id):
-    @app.route('/api/details/<ntc_id>', methods=['GET'])
-    @rate_limit
-    def get_notice_details(ntc_id):
-        """Coordination statistics and Resolutions status (Res35, ESIM, Res8) for one notice (used by the row-click popup),
-        read live from the SNS database (SQL Server, dbo). The parts are queried
-        independently: if one fails the others are still returned."""
-        if not ntc_id.isdigit():
-            return jsonify({'success': False, 'error': 'ntc_id must be numeric'}), 400
-        conn = get_sql_server_connection()
-        if not conn:
-            return jsonify({'success': False, 'error': 'SNS database not reachable'}), 503
-        details, res35, esim, res8, errors = None, None, None, None, []
-        try:
-            try:
-                details = fetch_notice_details(int(ntc_id), conn)
-            except Exception as e:
-                logger.error(f"Error fetching coordination details for ntc_id={ntc_id}: {e}")
-                errors.append('Failed to query coordination data')
-            try:
-                res35 = fetch_res35(int(ntc_id), conn)
-            except Exception as e:
-                logger.error(f"Error fetching Res35 for ntc_id={ntc_id}: {e}")
-                errors.append('Failed to query Res35 data')
-            try:
-                esim = fetch_esim_groups(int(ntc_id), conn)
-            except Exception as e:
-                logger.error(f"Error fetching ESIM groups for ntc_id={ntc_id}: {e}")
-                errors.append('Failed to query ESIM data')
-            try:
-                res8 = fetch_res8(int(ntc_id), conn)
-            except Exception as e:
-                logger.error(f"Error fetching Res8 for ntc_id={ntc_id}: {e}")
-                errors.append('Failed to query Res8 data')
-        finally:
-            conn.close()
-        if details is None and res35 is None and esim is None and res8 is None:
-            return jsonify({'success': False, 'error': '; '.join(errors)}), 500
-        return jsonify({'success': True, 'ntc_id': ntc_id, 'details': details, 'res35': res35,
-                        'esim': esim, 'res8': res8, 'errors': errors})
-    read live from the SNS database (SQL Server, dbo). The two parts are queried
-    independently: if one fails the other is still returned."""
+    """Coordination statistics and Resolutions status (Res35, ESIM, Res8) for one notice (used by the row-click popup),
+    read live from the SNS database (SQL Server, dbo). The parts are queried
+    independently: if one fails the others are still returned."""
     if not ntc_id.isdigit():
         return jsonify({'success': False, 'error': 'ntc_id must be numeric'}), 400
+
     conn = get_sql_server_connection()
     if not conn:
         return jsonify({'success': False, 'error': 'SNS database not reachable'}), 503
-    details, res35, errors = None, None, []
+
+    details, res35, esim, res8, errors = None, None, None, None, []
     try:
         try:
             details = fetch_notice_details(int(ntc_id), conn)
         except Exception as e:
             logger.error(f"Error fetching coordination details for ntc_id={ntc_id}: {e}")
             errors.append('Failed to query coordination data')
+
         try:
             res35 = fetch_res35(int(ntc_id), conn)
         except Exception as e:
             logger.error(f"Error fetching Res35 for ntc_id={ntc_id}: {e}")
             errors.append('Failed to query Res35 data')
-    esim = None
-            try:
-                esim = fetch_esim_groups(int(ntc_id), conn)
-            except Exception as e:
-                logger.error(f"Error fetching ESIM groups for ntc_id={ntc_id}: {e}")
-                errors.append('Failed to query ESIM data')
-            res8 = None
-            try:
-                res8 = fetch_res8(int(ntc_id), conn)
-            except Exception as e:
-                logger.error(f"Error fetching Res8 for ntc_id={ntc_id}: {e}")
-                errors.append('Failed to query Res8 data')
-        finally:
-            conn.close()
-        if details is None and res35 is None and esim is None and res8 is None:
-            return jsonify({'success': False, 'error': '; '.join(errors)}), 500
-        return jsonify({'success': True, 'ntc_id': ntc_id, 'details': details, 'res35': res35,
-                        'esim': esim, 'res8': res8, 'errors': errors})
 
+        try:
+            esim = fetch_esim_groups(int(ntc_id), conn)
+        except Exception as e:
+            logger.error(f"Error fetching ESIM groups for ntc_id={ntc_id}: {e}")
+            errors.append('Failed to query ESIM data')
+
+        try:
+            res8 = fetch_res8(int(ntc_id), conn)
+        except Exception as e:
+            logger.error(f"Error fetching Res8 for ntc_id={ntc_id}: {e}")
+            errors.append('Failed to query Res8 data')
+    finally:
+        conn.close()
+
+    if details is None and res35 is None and esim is None and res8 is None:
+        return jsonify({'success': False, 'error': '; '.join(errors)}), 500
+
+    return jsonify({
+        'success': True,
+        'ntc_id': ntc_id,
+        'details': details,
+        'res35': res35,
+        'esim': esim,
+        'res8': res8,
+        'errors': errors
+    })
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
