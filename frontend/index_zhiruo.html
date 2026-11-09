@@ -772,6 +772,99 @@
             color: #495057;
         }
 
+        .details-sub {
+            margin-left: 24px;
+        }
+
+        .details-filter {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 4px 14px;
+            padding: 6px 16px;
+            border-bottom: 1px solid #dee2e6;
+            background: var(--header-bg);
+            font-size: 0.8rem;
+        }
+
+        .details-filter label {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+            margin: 0;
+        }
+
+        .details-filter-actions {
+            margin-left: auto;
+            font-size: 0.75rem;
+        }
+
+        /* Column source colours: header tint, legend, column chips */
+        table.dataTable thead th.src-sntrack { background-color: #e3eefb !important; }
+        table.dataTable thead th.src-esub { background-color: #e5f4e8 !important; }
+        table.dataTable thead th.src-sns { background-color: #fdf0dc !important; }
+        .source-legend {
+            margin-left: 12px;
+            font-size: 0.72rem;
+            font-weight: 400;
+            color: #6c757d;
+        }
+        .src-dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 2px;
+            margin: 0 3px 0 8px;
+            vertical-align: -1px;
+            border: 1px solid #ced4da;
+        }
+        .src-dot.src-sntrack { background: #e3eefb; }
+        .src-dot.src-esub { background: #e5f4e8; }
+        .src-dot.src-sns { background: #fdf0dc; }
+        .col-chip.chip-src-sntrack { border-left: 4px solid #9ec5f0; }
+        .col-chip.chip-src-esub { border-left: 4px solid #9fd3aa; }
+        .col-chip.chip-src-sns { border-left: 4px solid #f2c27a; }
+
+        table.res-summary {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.8rem;
+        }
+
+        #detailsModal table.res-summary th {
+            width: auto;
+            padding: 3px 6px;
+            border-bottom: 1px solid #dee2e6;
+            color: #6c757d;
+            font-weight: 600;
+            font-size: 0.72rem;
+        }
+
+        #detailsModal table.res-summary td {
+            padding: 4px 6px;
+            border-bottom: 1px solid #f1f3f5;
+            vertical-align: top;
+        }
+
+        .res-summary .res-toggle {
+            font-size: 0.75rem;
+            color: var(--itu-blue);
+            text-decoration: none;
+            white-space: nowrap;
+        }
+
+        .res-detail {
+            margin-top: 8px;
+        }
+
+        .res-detail-title {
+            font-weight: 600;
+            font-size: 0.75rem;
+            color: var(--itu-blue);
+            margin-bottom: 4px;
+        }
+
         .res35-groups {
             max-height: 320px;
             overflow: auto;
@@ -796,8 +889,23 @@
             white-space: nowrap;
         }
 
-        .details-sub {
-            margin-left: 24px;
+        .res35-table tr.res35-diff td {
+            background: #fff8e1;
+        }
+
+        .res35-miss {
+            color: #adb5bd;
+        }
+
+        .res35-warn {
+            color: #b26a00;
+            font-weight: 600;
+        }
+
+        .details-filter-actions .btn-link {
+            font-size: 0.75rem;
+            color: var(--itu-blue);
+            text-decoration: none;
         }
     </style>
 </head>
@@ -848,7 +956,13 @@
         <div class="filter-row">
             <div class="left-filters">
                 <div class="w-100 d-flex justify-content-between align-items-center">
-                    <h5 class="m-0" style="color:#495057; font-weight:600;">Data Preview</h5>
+                    <h5 class="m-0" style="color:#495057; font-weight:600;">Data Preview
+                        <span class="source-legend" title="Column header colour = database the column comes from">
+                            <span class="src-dot src-sntrack"></span>SNTrack
+                            <span class="src-dot src-esub"></span>E-submission
+                            <span class="src-dot src-sns"></span>SNS
+                        </span>
+                    </h5>
                     <span id="lastUpdated"></span>
                 </div>
 
@@ -935,6 +1049,9 @@
                             <th>Res169</th>
                             <th>Res123</th>
                             <th>Res35</th>
+                            <th>Res8</th>
+                            <th>Resolutions</th>
+                            <th>Source</th>
                         </tr>
                         <tr class="column-filter-row">
                             <th></th><th></th><th></th><th></th><th></th><th></th>
@@ -942,7 +1059,7 @@
                             <th></th><th></th><th></th><th></th><th></th><th></th>
                             <th></th><th></th><th></th><th></th><th></th><th></th>
                             <th></th><th></th><th></th><th></th><th></th><th></th>
-                            <th></th>
+                            <th></th><th></th><th></th><th></th>
                         </tr>
                     </thead>
                     <tbody></tbody>
@@ -958,6 +1075,19 @@
                 <div class="modal-header">
                     <h5 class="modal-title" id="detailsModalTitle">Notice details</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="details-filter" id="detailsSectionFilter">
+                    <label><input type="checkbox" value="resolutions"> Resolutions</label>
+                    <label><input type="checkbox" value="sntrack"> SNTrack</label>
+                    <label><input type="checkbox" value="esub"> E-submission</label>
+                    <label><input type="checkbox" value="srs_notice"> SRS-notice</label>
+                    <label><input type="checkbox" value="srs_provn"> SRS-provn</label>
+                    <label><input type="checkbox" value="srs_others"> SRS-others</label>
+                    <span class="details-filter-actions">
+                        <button type="button" class="btn btn-link btn-sm p-0" id="detailsSectionsAll">All</button>
+                        <span class="text-muted">/</span>
+                        <button type="button" class="btn btn-link btn-sm p-0" id="detailsSectionsNone">None</button>
+                    </span>
                 </div>
                 <div class="modal-body p-2" id="detailsModalBody"></div>
             </div>
@@ -1126,8 +1256,38 @@
             { data: 'RES156', title: 'Res156', render: function(data) { return data ? 'Yes' : ''; }},
             { data: 'RES169', title: 'Res169', render: function(data) { return data ? 'Yes' : ''; }},
             { data: 'RES123', title: 'Res123', render: function(data) { return data ? 'Yes' : ''; }},
-            { data: 'RES35', title: 'Res35', defaultContent: '', render: function(data) { return data ? 'Yes' : ''; }}
+            { data: 'RES35', title: 'Res35', defaultContent: '', render: function(data) { return data ? 'Yes' : ''; }},
+            { data: 'RES8', title: 'Res8', defaultContent: '', render: function(data) { return data ? 'Yes' : ''; }},
+            { data: null, title: 'Resolutions', render: function(data, type, row) { return resolutionsText(row); }},
+            { data: 'Source', title: 'Source', defaultContent: '' }
         ];
+
+        // Resolutions that apply to a row, e.g. "Res35, Res123" (combined column)
+        const RESOLUTION_FIELDS = [['RES35', 'Res35'], ['RES156', 'Res156'], ['RES169', 'Res169'],
+                                   ['RES123', 'Res123'], ['RES8', 'Res8']];
+        function resolutionsText(row) {
+            return RESOLUTION_FIELDS.filter(function(f) { return row[f[0]]; })
+                                    .map(function(f) { return f[1]; }).join(', ');
+        }
+
+        // Database each column comes from (header colour + tooltip, column chips)
+        const COLUMN_SOURCE = {
+            sntrack: { label: 'SNTrack', detail: 'MS Access sntrdat.mdb, tblSpaceStnNotif',
+                       fields: ['ADM', 'BRREG', 'tgt_ntc_id', 'PHASE', 'f_11_32A', 'f_11_41', 'subtoc', 'd_check_in',
+                                'd_spr_out', 'CIRC', 'PUB', 'CIRC2', 'PUB2', 'CIRC3', 'PUB3', 'SUP', 'remarks'] },
+            esub:    { label: 'E-submission', detail: 'SQL Server res908.Res908 / dbo.Submissions',
+                       fields: ['sntrack_id', 'ntwk_org', 'SatName', 'long_nom', 'DateOfReceive', 'act_code',
+                                'TypeOfSubmission', 'Status', 'InternalReference'] },
+            sns:     { label: 'SNS', detail: 'SQL Server SpaceNetworkSystem (dbo), computed',
+                       fields: ['RES156', 'RES169', 'RES123', 'RES35', 'RES8', 'Resolutions'] }
+        };
+        function columnSource(col) {
+            var key = col.data === null ? col.title : col.data;
+            for (var src in COLUMN_SOURCE) {
+                if (COLUMN_SOURCE[src].fields.indexOf(key) >= 0) return src;
+            }
+            return null;   // Notice ID (both databases), Source
+        }
 
         // Track column visibility (initialized inside $(document).ready via initColumnVisibility)
         let columnVisibility = [];
@@ -1201,7 +1361,7 @@
             var allData = [];
             
             // Column config version - increment when columns change
-            const COLUMN_CONFIG_VERSION = 5; // v5: added Res35 column
+            const COLUMN_CONFIG_VERSION = 6; // v6: added Res8, Resolutions and Source columns
 
             // Default column visibility: SNTrackID, ADM, SatName, long_nom, BRReg, DateOfReceive,
             // Notice ID, act_code, tgt_ntc_id, TypeOfSubmission, Status, 11.32A, 11.41, subtoc, Res156/169/123
@@ -1233,10 +1393,13 @@
                 false, // 24 SUP
                 false, // 25 remarks
                 false, // 26 InternalReference
-                true,  // 27 Res156
-                true,  // 28 Res169
-                true,  // 29 Res123
-                true   // 30 Res35 (grp_res35)
+                false, // 27 Res156 (shown in Resolutions)
+                false, // 28 Res169 (shown in Resolutions)
+                false, // 29 Res123 (shown in Resolutions)
+                false, // 30 Res35 (shown in Resolutions)
+                false, // 31 Res8 (shown in Resolutions)
+                true,  // 32 Resolutions
+                true   // 33 Source
             ];
 
             // Initialize column visibility - check localStorage first
@@ -1279,7 +1442,9 @@
 
                 columnConfig.forEach(function(col, idx) {
                     var isActive = columnVisibility[idx];
-                    var $chip = $('<label class="col-chip' + (isActive ? ' active' : '') + '" data-index="' + idx + '">' +
+                    var src = columnSource(col);
+                    var $chip = $('<label class="col-chip' + (isActive ? ' active' : '') + (src ? ' chip-src-' + src : '') +
+                        '" data-index="' + idx + '"' + (src ? ' title="Source: ' + COLUMN_SOURCE[src].detail + '"' : '') + '>' +
                         '<input type="checkbox" ' + (isActive ? 'checked' : '') + '>' +
                         '<i class="fas fa-check-circle"></i>' +
                         '<span>' + col.title + '</span>' +
@@ -1488,8 +1653,21 @@
                          '<"row"<"col-sm-12 col-md-5"><"col-sm-12 col-md-7"p>>',
                     initComplete: function() {
                         var api = this.api();
+                        columnConfig.forEach(function(col, i) {
+                            var src = columnSource(col);
+                            if (src) {
+                                $(api.column(i).header()).addClass('src-' + src)
+                                    .attr('title', 'Source: ' + COLUMN_SOURCE[src].detail);
+                            }
+                        });
                         buildColumnChips();
                         restoreColumnSettings();
+                        // `table` is not assigned yet while DataTables runs initComplete, so
+                        // apply the saved / default column visibility through `api` here.
+                        columnConfig.forEach(function(col, idx) {
+                            api.column(idx).visible(columnVisibility[idx], false);
+                        });
+                        api.columns.adjust();
                         buildColumnFilters(api);
                         $('#ituTable').show();
                         var now = new Date();
@@ -1652,7 +1830,9 @@
                     'RES156': ['', 'Yes', 'Empty'],
                     'RES169': ['', 'Yes', 'Empty'],
                     'RES123': ['', 'Yes', 'Empty'],
-                    'RES35': ['', 'Yes', 'Empty']
+                    'RES35': ['', 'Yes', 'Empty'],
+                    'RES8': ['', 'Yes', 'Empty'],
+                    'Source': ['', 'SNTrack', 'E-submission', 'Both']
                 };
 
                 // ---- Rebuild the filter row from scratch every time ----
@@ -2446,8 +2626,14 @@
                 return html;
             }
 
-            // ---- Res35 (Option 2: dbo.grp_res35) ----
+            // ---- Res35 block (SNS database) ----
             var RES35_MAX_ROWS = 500;
+
+            function res35Verdict(opt) {
+                if (!opt) return '';
+                var n = opt.groups.length;
+                return opt.is_res35 ? '<b>Yes</b> &ndash; ' + n + ' group' + (n === 1 ? '' : 's') : 'No';
+            }
 
             function res35Freq(g) {
                 if (g.freq_min === null || g.freq_min === undefined) return '';
@@ -2455,76 +2641,271 @@
                 return fmt(g.freq_min) + '&ndash;' + fmt(g.freq_max);
             }
 
-            // r: res35 object from /api/details (null while loading or when SNS is not reachable)
-            function renderRes35(r, loaded) {
-                var html = detailSection('Res35', 'SNS database (live, dbo.grp_res35)');
-                if (!r) {
-                    return html + detailRow('Res35', loaded ? '<span class="text-muted">SNS database not reachable</span>' : '');
-                }
-                if (!r.in_sns) {
-                    return html + '<tr><td colspan="2" class="text-muted">Notice not found in SNS database.</td></tr>';
-                }
-                var n = r.groups.length;
-                html += detailRow('Res35', r.is_res35 ? '<b>Yes</b> &ndash; ' + n + ' group' + (n === 1 ? '' : 's') + ' in grp_res35' : 'No');
-                if (r.ntc_type && r.ntc_type !== 'N') {
-                    html += detailRow('Note', 'Not a non-GSO notice (ntc_type ' + escapeHtml(r.ntc_type) +
-                                              '); Res 35 applies to non-GSO systems only.');
-                }
-                if (n) {
-                    var t = '<div class="res35-groups"><table class="table table-sm res35-table"><thead><tr>' +
-                            '<th>grp_id</th><th>beam</th><th>E/R</th><th>freq (MHz)</th><th>milestone</th>' +
-                            '<th>met</th><th>next deadline</th></tr></thead><tbody>';
-                    r.groups.slice(0, RES35_MAX_ROWS).forEach(function(g) {
-                        t += '<tr><td>' + g.grp_id + '</td><td>' + detailValue(g.beam_name) + '</td><td>' +
-                             detailValue(g.emi_rcp) + '</td><td>' + res35Freq(g) + '</td><td>' + detailValue(g.ms_step) +
-                             '</td><td>' + detailValue(g.f_ms_met) + '</td><td>' +
-                             escapeHtml(formatDateDMY(g.d_ms_next_deadline)) + '</td></tr>';
-                    });
-                    t += '</tbody></table></div>';
-                    if (n > RES35_MAX_ROWS) t += '<div class="text-muted small">Showing first ' + RES35_MAX_ROWS + ' of ' + n + ' groups.</div>';
-                    html += '<tr><td colspan="2">' + t + '</td></tr>';
+            function res35GroupTable(r) {
+                // One row per group selected by Option 1 and/or Option 2
+                var byId = {};
+                r.option1.groups.forEach(function(g) { byId[g.grp_id] = { g: g, o1: g }; });
+                r.option2.groups.forEach(function(g) {
+                    byId[g.grp_id] = byId[g.grp_id] || { g: g };
+                    byId[g.grp_id].o2 = g;
+                });
+                var ids = Object.keys(byId).map(Number).sort(function(a, b) { return a - b; });
+                if (!ids.length) return '';
+                var html = '<div class="res35-groups"><table class="table table-sm res35-table"><thead><tr>' +
+                    '<th>grp_id</th><th>beam</th><th>E/R</th><th>freq (MHz)</th><th>stn_cls</th><th>service area</th>' +
+                    '<th>Opt 1: Res 35 Table band</th><th>Opt 2: grp_res35 milestone</th></tr></thead><tbody>';
+                ids.slice(0, RES35_MAX_ROWS).forEach(function(id) {
+                    var e = byId[id], g = e.g;
+                    var o1 = e.o1 ? e.o1.res35_bands.map(escapeHtml).join('<br>') : '<span class="res35-miss">&ndash;</span>';
+                    var o2 = e.o2 ? escapeHtml([e.o2.ms_step || 'listed', e.o2.f_ms_met ? 'met ' + e.o2.f_ms_met : '',
+                                                e.o2.d_ms_next_deadline ? 'next ' + formatDateDMY(e.o2.d_ms_next_deadline) : '']
+                                               .filter(Boolean).join(' · '))
+                                  : '<span class="res35-miss">&ndash;</span>';
+                    var cls = (e.o1 && e.o2) ? '' : ' class="res35-diff"';
+                    var area = (g.service_area && g.service_area.length) ? escapeHtml(g.service_area.join(', ')) : 'global';
+                    if (g.region_check_needed) area += ' <span class="res35-warn" title="Region cannot be read from the service area">(check Region)</span>';
+                    html += '<tr' + cls + '><td>' + id + '</td><td>' + detailValue(g.beam_name) + '</td><td>' +
+                            detailValue(g.emi_rcp) + '</td><td>' + res35Freq(g) + '</td><td>' +
+                            escapeHtml((g.stn_cls || []).join(', ')) + '</td><td>' + area + '</td><td>' + o1 +
+                            '</td><td>' + o2 + '</td></tr>';
+                });
+                html += '</tbody></table></div>';
+                if (ids.length > RES35_MAX_ROWS) {
+                    html += '<div class="text-muted small">Showing first ' + RES35_MAX_ROWS + ' of ' + ids.length + ' groups.</div>';
                 }
                 return html;
             }
 
-            // d: coordination details, r: Res35 from /api/details (null while loading or on error).
+            // Res35 row of the Resolutions table: [applies, basis html, detail html]
+            // r: res35 object from /api/details (null while loading / SNS unreachable)
+            function res35Summary(r, loaded) {
+                if (!r) return [loaded ? '' : '&hellip;', loaded ? '<span class="text-muted">SNS database not reachable</span>' : 'Loading&hellip;', ''];
+                if (!r.in_sns) return ['', '<span class="text-muted">Notice not found in SNS database</span>', ''];
+                var o1 = r.option1.is_res35, o2 = r.option2.is_res35;
+                var applies = o2 ? '<b>Yes</b>' : (o1 ? 'No <span class="res35-warn">(Option 1: Yes)</span>' : 'No');
+                var basis = 'Option 2 (grp_res35): ' + res35Verdict(r.option2) +
+                            '<br>Option 1 (Res 35 rules): ' + res35Verdict(r.option1);
+                var c = r.compare, detail = '';
+                if (r.option1.groups.length || r.option2.groups.length) {
+                    var cmp = c.both + ' in both';
+                    if (c.only_option1.length) cmp += ' &middot; <span class="res35-warn">' + c.only_option1.length + ' only in Option 1</span>';
+                    if (c.only_option2.length) cmp += ' &middot; <span class="res35-warn">' + c.only_option2.length + ' only in Option 2</span>';
+                    if (!c.only_option1.length && !c.only_option2.length) cmp += ' &middot; options agree';
+                    basis += '<br>Groups: ' + cmp;
+                    detail = res35GroupTable(r);
+                }
+                if (r.ntc_type && r.ntc_type !== 'N') {
+                    basis += '<br><span class="text-muted">Not a non-GSO notice (ntc_type ' + escapeHtml(r.ntc_type) +
+                             '); Res 35 applies to non-GSO systems only.</span>';
+                }
+                return [applies, basis, detail];
+            }
+
+            // ESIM rows (Res156 / Res169 / Res123): [applies, basis html, detail html]
+            // esim: {RES156: {is_res, groups}, ...} from /api/details (null while loading)
+            var ESIM_RULE_TEXT = {
+                RES156: 'ESIM class UF/UC, GSO, 19.7&ndash;20.2 / 29.5&ndash;30.0 GHz',
+                RES169: 'ESIM class UO/US/UU, GSO, 17.7&ndash;19.7 / 27.5&ndash;29.5 GHz',
+                RES123: 'ESIM class UO/US, non-GSO, 17.7&ndash;18.6 / 18.8&ndash;19.3 / 19.7&ndash;20.2 / 27.5&ndash;29.1 / 29.5&ndash;30.0 GHz'
+            };
+
+            function esimGroupTable(groups) {
+                var html = '<div class="res35-groups"><table class="table table-sm res35-table"><thead><tr>' +
+                    '<th>grp_id</th><th>beam</th><th>E/R</th><th>freq (MHz)</th><th>ESIM class</th><th>band</th>' +
+                    '</tr></thead><tbody>';
+                groups.slice(0, RES35_MAX_ROWS).forEach(function(g) {
+                    html += '<tr><td>' + g.grp_id + '</td><td>' + detailValue(g.beam_name) + '</td><td>' +
+                            detailValue(g.emi_rcp) + '</td><td>' + res35Freq(g) + '</td><td>' +
+                            escapeHtml(g.stn_cls.join(', ')) + '</td><td>' + escapeHtml(g.bands.join(', ')) + '</td></tr>';
+                });
+                html += '</tbody></table></div>';
+                if (groups.length > RES35_MAX_ROWS) {
+                    html += '<div class="text-muted small">Showing first ' + RES35_MAX_ROWS + ' of ' + groups.length + ' groups.</div>';
+                }
+                return html;
+            }
+
+            function esimSummary(key, rowData, esim, loaded) {
+                var rule = '<span class="text-muted">' + ESIM_RULE_TEXT[key] + '</span>';
+                if (!esim) {
+                    // live data not (yet) available: fall back to the table flag
+                    var flag = rowData[key] ? '<b>Yes</b>' : 'No';
+                    return [flag, (loaded ? 'From table data (SNS not reachable)' : 'Loading&hellip;') + '<br>' + rule, ''];
+                }
+                var e = esim[key], n = e.groups.length;
+                var basis = e.is_res ? n + ' ESIM group' + (n === 1 ? '' : 's') + ' in the bands' : 'No ESIM group in the bands';
+                if (!!rowData[key] !== e.is_res) {
+                    basis += ' <span class="res35-warn">(table shows ' + (rowData[key] ? 'Yes' : 'No') + ' &ndash; click Refresh)</span>';
+                }
+                return [e.is_res ? '<b>Yes</b>' : 'No', basis + '<br>' + rule, e.is_res ? esimGroupTable(e.groups) : ''];
+            }
+
+            // Res8 row: notice is a Res 8 submission (dbo.res8_sp_stn) or referenced by one
+            function res8Summary(rowData, res8, loaded) {
+                if (!res8) {
+                    return [rowData.RES8 ? '<b>Yes</b>' : 'No', loaded ? 'From table data (SNS not reachable)' : 'Loading&hellip;', ''];
+                }
+                var parts = [], detail = '';
+                if (res8.stations.length) {
+                    var rs = Object.keys(res8.resolves).map(function(k) {
+                        return escapeHtml(k || '(blank)') + ' &times;' + res8.resolves[k];
+                    }).join(', ');
+                    parts.push('Res 8 submission: ' + res8.stations.length + ' space stations (' + rs + ')');
+                    detail = '<div class="res35-groups"><table class="table table-sm res35-table"><thead><tr>' +
+                             '<th>itu_sat_id</th><th>space station</th><th>res8_resolves</th></tr></thead><tbody>' +
+                             res8.stations.slice(0, RES35_MAX_ROWS).map(function(st) {
+                                 return '<tr><td>' + detailValue(st.itu_sat_id) + '</td><td>' + detailValue(st.sp_stn_name) +
+                                        '</td><td>' + detailValue(st.res8_resolves) + '</td></tr>';
+                             }).join('') + '</tbody></table></div>';
+                }
+                if (res8.referenced_by.length) {
+                    parts.push('Space stations covered by Res 8 submission ' + res8.referenced_by.map(function(r) {
+                        return r.ntc_id + ' (' + r.stations + ')';
+                    }).join(', '));
+                }
+                if (!parts.length) parts.push('No Res 8 data (dbo.res8_sp_stn)');
+                return [res8.is_res8 ? '<b>Yes</b>' : 'No', parts.join('<br>'), detail];
+            }
+
+            // One block for all resolutions: a Yes/No row each, details on demand.
+            // To add a resolution (e.g. Res8), add a row here.
+            function renderResolutions(rowData, r, loaded, esim, res8) {
+                var rows = [['Res35', 'SNS database (live)'].concat(res35Summary(r, loaded)),
+                            ['Res156', 'ESIM'].concat(esimSummary('RES156', rowData, esim, loaded)),
+                            ['Res169', 'ESIM'].concat(esimSummary('RES169', rowData, esim, loaded)),
+                            ['Res123', 'ESIM'].concat(esimSummary('RES123', rowData, esim, loaded)),
+                            ['Res8', 'SNS database (live)'].concat(res8Summary(rowData, res8, loaded))];
+                var html = detailSection('Resolutions');
+                var t = '<table class="res-summary"><thead><tr><th>Resolution</th><th>Applies</th><th>Basis</th><th></th></tr></thead><tbody>';
+                var details = '';
+                rows.forEach(function(row) {
+                    var id = 'res-detail-' + row[0].toLowerCase();
+                    var what = row[0] === 'Res8' ? 'Stations' : 'Groups';
+                    var btn = row[4] ? '<button type="button" class="btn btn-link btn-sm p-0 res-toggle" data-target="' + id +
+                                       '" data-label="' + what + '">' + what + ' &#9656;</button>' : '';
+                    t += '<tr><td><b>' + row[0] + '</b></td><td>' + row[2] + '</td><td>' + row[3] + '</td><td>' + btn + '</td></tr>';
+                    if (row[4]) details += '<div class="res-detail" id="' + id + '" hidden><div class="res-detail-title">' +
+                                           row[0] + ' &ndash; ' + (row[0] === 'Res8' ? 'space stations' : 'groups') + '</div>' + row[4] + '</div>';
+                });
+                t += '</tbody></table>';
+                return html + '<tr><td colspan="2">' + t + details + '</td></tr>';
+            }
+
+            // Show / hide the group details of a resolution
+            $('#detailsModalBody').on('click', '.res-toggle', function() {
+                var $d = $('#' + $(this).data('target'));
+                var open = $d.prop('hidden');
+                $d.prop('hidden', !open);
+                $(this).html(($(this).data('label') || 'Groups') + ' ' + (open ? '&#9662;' : '&#9656;'));
+            });
+
+            // d: SRS details, r: Res35, esim: ESIM groups from /api/details (null while loading or on error).
             // Every field name is always shown; missing values stay blank.
-            function renderDetails(rowData, d, r, loaded) {
-                var html = '<table class="table table-sm table-borderless">';
+            // Each block is its own <tbody data-section>, shown/hidden by the section filter.
+            function renderDetails(rowData, d, r, loaded, esim, res8) {
+                var notFound = d && !d.found;
+                d = d || {};
+                var blocks = [];
 
-                html += detailSection('SNTrack', 'MS Access sntrdat.mdb');
-                SNTRACK_FIELDS.forEach(function(f) { html += detailRow(f[1], fieldValue(rowData, f[0])); });
+                blocks.push(['resolutions', renderResolutions(rowData, r, loaded, esim, res8)]);
 
-                html += detailSection('e-submission', 'SQL Server (res908 / Submissions)');
+                var sntrack = detailSection('SNTrack', 'MS Access sntrdat.mdb');
+                SNTRACK_FIELDS.forEach(function(f) { sntrack += detailRow(f[1], fieldValue(rowData, f[0])); });
+                blocks.push(['sntrack', sntrack]);
+
+                var esub = detailSection('E-submission', 'SQL Server (res908 / Submissions)');
                 ESUB_FIELDS.forEach(function(f) {
                     var v = f[0] === 'TypeOfSubmission' ? escapeHtml(getTypeShortName(rowData[f[0]]) || '')
                                                         : fieldValue(rowData, f[0]);
-                    html += detailRow(f[1], v);
+                    esub += detailRow(f[1], v);
                 });
+                blocks.push(['esub', esub]);
 
-                html += renderRes35(r, loaded);
-
-                html += detailSection('SRS', 'SNS database (live, dbo)');
-                if (d && !d.found) {
-                    html += '<tr><td colspan="2" class="text-muted">Notice not found in SNS database.</td></tr>';
+                var notice = detailSection('SRS-notice', 'SNS database (live, dbo)');
+                if (notFound) {
+                    notice += '<tr><td colspan="2" class="text-muted">Notice not found in SNS database.</td></tr>';
                 }
-                d = d || {};
-                html += detailRow('Res156', rowData.RES156 ? 'Yes' : '');
-                html += detailRow('Res169', rowData.RES169 ? 'Yes' : '');
-                html += detailRow('Res123', rowData.RES123 ? 'Yes' : '');
-                html += detailRow('prov', detailValue(d.prov));
-                html += detailRow('ntf_occurs', detailValue(d.ntf_occurs));
-                html += detailRow('prov_desc', detailValue(d.prov_desc));
-                html += detailSection('SRS &ndash; provn');
-                html += coordinationRows(d.provn, false);
-                html += detailSection('SRS &ndash; tr_aff_ntw');
-                html += coordinationRows(d.tr_aff_ntw, true);
-                html += detailSection('SRS &ndash; row counts');
-                html += detailRow('coord_agree_ntw', detailValue(d.coord_agree_ntw_count));
-                html += detailRow('all_aff_ntw', detailValue(d.all_aff_ntw_count));
+                notice += detailRow('prov', detailValue(d.prov));
+                notice += detailRow('ntf_occurs', detailValue(d.ntf_occurs));
+                notice += detailRow('prov_desc', detailValue(d.prov_desc));
+                blocks.push(['srs_notice', notice]);
+
+                blocks.push(['srs_provn', detailSection('SRS-provn', 'SNS database (live, dbo)') + coordinationRows(d.provn, false)]);
+
+                var others = detailSection('SRS-others &ndash; tr_aff_ntw', 'SNS database (live, dbo)');
+                others += coordinationRows(d.tr_aff_ntw, true);
+                others += detailSection('SRS-others &ndash; row counts');
+                others += detailRow('coord_agree_ntw', detailValue(d.coord_agree_ntw_count));
+                others += detailRow('all_aff_ntw', detailValue(d.all_aff_ntw_count));
+                blocks.push(['srs_others', others]);
+
+                var html = '<table class="table table-sm table-borderless">';
+                blocks.forEach(function(b) { html += '<tbody data-section="' + b[0] + '">' + b[1] + '</tbody>'; });
                 html += '</table>';
+                html += '<div class="text-muted text-center py-3 details-none-selected" style="display:none">' +
+                        'No section selected &ndash; tick at least one section above.</div>';
                 return html;
             }
+
+            // ---- Section filter (remembered per browser; storage is optional) ----
+            var DETAIL_SECTIONS = ['resolutions', 'sntrack', 'esub', 'srs_notice', 'srs_provn', 'srs_others'];
+            var DETAIL_SECTIONS_KEY = 'trackingNotif.detailSections';
+
+            function loadDetailSections() {
+                try {
+                    var saved = JSON.parse(localStorage.getItem(DETAIL_SECTIONS_KEY));
+                    // Saved as {selected, known}; sections added after the choice was saved start ticked.
+                    var selected = Array.isArray(saved) ? saved : (saved && saved.selected);
+                    var known = (saved && saved.known) || ['esim', 'sntrack', 'esub', 'srs_notice', 'srs_provn', 'srs_others'];
+                    if (Array.isArray(selected)) {
+                        return DETAIL_SECTIONS.filter(function(s) {
+                            return selected.indexOf(s) >= 0 || known.indexOf(s) < 0;
+                        });
+                    }
+                } catch (e) { /* storage unavailable: fall back to all sections */ }
+                return DETAIL_SECTIONS.slice();
+            }
+
+            function saveDetailSections(sections) {
+                try {
+                    localStorage.setItem(DETAIL_SECTIONS_KEY, JSON.stringify({ selected: sections, known: DETAIL_SECTIONS }));
+                } catch (e) { /* ignore */ }
+            }
+
+            function selectedDetailSections() {
+                return $('#detailsSectionFilter input:checked').map(function() { return this.value; }).get();
+            }
+
+            function applyDetailSections() {
+                var selected = selectedDetailSections();
+                var $body = $('#detailsModalBody');
+                $body.find('tbody[data-section]').each(function() {
+                    $(this).toggle(selected.indexOf($(this).data('section')) >= 0);
+                });
+                $body.find('.details-none-selected').toggle(selected.length === 0);
+            }
+
+            function showDetails(html) {
+                $('#detailsModalBody').html(html);
+                applyDetailSections();
+            }
+
+            (function initDetailSectionFilter() {
+                var selected = loadDetailSections();
+                $('#detailsSectionFilter input').each(function() {
+                    this.checked = selected.indexOf(this.value) >= 0;
+                });
+                $('#detailsSectionFilter input').on('change', function() {
+                    saveDetailSections(selectedDetailSections());
+                    applyDetailSections();
+                });
+                $('#detailsSectionsAll, #detailsSectionsNone').on('click', function() {
+                    var all = this.id === 'detailsSectionsAll';
+                    $('#detailsSectionFilter input').prop('checked', all);
+                    saveDetailSections(selectedDetailSections());
+                    applyDetailSections();
+                });
+            })();
 
             var detailsModal = new bootstrap.Modal(document.getElementById('detailsModal'));
             var detailsRequest = null;
@@ -2537,13 +2918,13 @@
 
                 $('#detailsModalTitle').text('Notice ' + (ntcId || '') +
                     (rowData.SatName ? ' – ' + rowData.SatName : ''));
-                $('#detailsModalBody').html(renderDetails(rowData, null) +
+                showDetails(renderDetails(rowData, null) +
                     '<div class="text-center text-muted py-2"><i class="fas fa-spinner fa-spin"></i> Loading SNS data...</div>');
                 detailsModal.show();
 
                 if (detailsRequest) detailsRequest.abort();
                 if (!ntcId || !/^\d+$/.test(String(ntcId))) {
-                    $('#detailsModalBody').html(renderDetails(rowData, null) +
+                    showDetails(renderDetails(rowData, null) +
                         '<div class="text-muted px-2">No Notice ID &ndash; SNS data not available.</div>');
                     return;
                 }
@@ -2552,12 +2933,14 @@
                     dataType: 'json',
                     timeout: 30000,
                     success: function(resp) {
-                        $('#detailsModalBody').html(renderDetails(rowData, resp.details, resp.res35, true));
+                        var warn = (resp.errors || []).length
+                            ? '<div class="text-warning px-2 small">' + resp.errors.map(escapeHtml).join('; ') + '</div>' : '';
+                        showDetails(renderDetails(rowData, resp.details, resp.res35, true, resp.esim, resp.res8) + warn);
                     },
                     error: function(xhr, status) {
                         if (status === 'abort') return;
                         var msg = (xhr.responseJSON && xhr.responseJSON.error) || status || 'request failed';
-                        $('#detailsModalBody').html(renderDetails(rowData, null) +
+                        showDetails(renderDetails(rowData, null) +
                             '<div class="text-danger px-2">Could not load SRS data: ' + escapeHtml(msg) + '</div>');
                     }
                 });
@@ -2760,7 +3143,7 @@
                     visibleCols.forEach(function(item) {
                         var key = item.col.data;
                         var header = item.col.title;
-                        var val = row[key];
+                        var val = key === null ? resolutionsText(row) : row[key];
                         if (dateFields.has(key)) {
                             val = fmtExportDate(val);
                         } else if (key === 'TypeOfSubmission') {

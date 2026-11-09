@@ -21,3 +21,8 @@ MDB_PASSWORD=
 # SRS_MDB_PATH=\\blue\dfs\br\BR_DATA\SPACE\SRS_DB\srs_all.mdb
 # FRONTEND_ORIGIN=https://intweb.itu.int
 # REFRESH_INTERVAL_SECONDS=86400
+
+# Where the backend also writes cached_data.json for the IIS page.
+# Default: \\intweb.itu.int\intwebroot\ITU-R\space\css\notification\data\cached_data.json
+# Set it to an empty value on development machines:
+# IIS_CACHE_PATH=
