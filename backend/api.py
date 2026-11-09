@@ -113,7 +113,7 @@ MDB_PASSWORD = _require_secret('MDB_PASSWORD')
 
 # Local data directory – files here are used for all connections.
 # Manually pre-seeded; auto-refreshed on every /api/data request.
-LOCAL_DATA_DIR = r'C:\Users\xuzhi\TrackingNotif\data'
+LOCAL_DATA_DIR = r'C:\Users\xianwu\Desktop\codingSpace\TrackingNotif\data'
 LOCAL_MDB_PATH = os.path.join(LOCAL_DATA_DIR, 'sntrdat.mdb')
 LOCAL_MDW_PATH = os.path.join(LOCAL_DATA_DIR, 'sntrapp.mdw')
 

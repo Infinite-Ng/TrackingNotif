@@ -1,11 +1,11 @@
 @echo off
 chcp 65001 > nul
 
-set "PYTHON_EXE_PATH=C:\Users\xuzhi\AppData\Local\anaconda3\envs\tracking_env\python.exe"
-set "PYTHON_SCRIPT_PATH=C:\Users\xuzhi\TrackingNotif\dataTransfer\data2Json.py"
-set "JSON_FILE_PATH=C:\Users\xuzhi\TrackingNotif\frontend\data\data.json"
+set "PYTHON_EXE_PATH=C:\Users\xianwu\Anaconda3\python.exe"
+set "PYTHON_SCRIPT_PATH=C:\Users\xianwu\Desktop\codingSpace\TrackingNotif\dataTransfer\data2Json.py"
+set "JSON_FILE_PATH=C:\Users\xianwu\Desktop\codingSpace\TrackingNotif\frontend\data\data.json"
 set "SERVER_TARGET_PATH=\\intweb.itu.int\intwebroot\ITU-R\space\css\tracking\data"
-set "LOG_FILE_PATH=C:\Users\xuzhi\TrackingNotif\dataTransfer\update_log.txt"
+set "LOG_FILE_PATH=C:\Users\xianwu\Desktop\codingSpace\TrackingNotif\dataTransfer\update_log.txt"
 
 echo ===================================== >> "%LOG_FILE_PATH%"
 echo %date% %time% - start working on updating the data >> "%LOG_FILE_PATH%"
